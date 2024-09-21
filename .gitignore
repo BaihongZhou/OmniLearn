@@ -1,0 +1,8 @@
+**/logs
+logs/
+*.png
+*.log
+*.txt
+*.py
+logs_temp/
+**/logs_temp/**

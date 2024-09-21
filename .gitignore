@@ -6,3 +6,4 @@ logs/
 *.py
 logs_temp/
 **/logs_temp/**
+**/*.h5

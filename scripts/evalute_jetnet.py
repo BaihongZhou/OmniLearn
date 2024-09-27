@@ -3,7 +3,7 @@ import h5py as h5
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-import horovod.tensorflow.keras as hvd
+from dummy_hvd import hvd as hvd
 import argparse
 import pickle
 from PET_jetnet import PET_jetnet
@@ -31,7 +31,7 @@ def parse_arguments():
     parser.add_argument("--talking_head", action='store_true', help="Use talking head attention")
     parser.add_argument("--layer_scale", action='store_true', help="Use layer scale in the residual connections")
     parser.add_argument("--skip_metric", action='store_true', help="Skip metric calculation")
-    parser.add_argument("--sample", action='store_true', help="Sample from trained model")
+    parser.add_argument("--sample", action='store_true', default=True, help="Sample from trained model")
     parser.add_argument("--top", action='store_true', help="Sample only top quarks")
     parser.add_argument("--ideal", action='store_true', help="Use true jets for generation")
     parser.add_argument("--plot_folder", default="../plots", help="Folder to save the outputs")
@@ -39,12 +39,13 @@ def parse_arguments():
 
 def get_data_info(flags):
     if flags.dataset == 'jetnet150':
-        test = utils.JetNetDataLoader(os.path.join(flags.folder,'JetNet','test_150.h5'),rank = hvd.rank(),size = hvd.size(),big=True)
+        test = utils.jetnetDataLoader(os.path.join(flags.folder,'jetnet','test_150.h5'),rank = hvd.rank(),size = hvd.size(),big=True)
         
     elif flags.dataset == 'jetnet30':
-        test = utils.JetNetDataLoader(os.path.join(flags.folder,'JetNet','test_30.h5'),rank = hvd.rank(),size = hvd.size())
+        test = utils.jetnetDataLoader(os.path.join(flags.folder,'jetnet','test_30.h5'),rank = hvd.rank(),size = hvd.size())
     
-    elif f
+    elif flags.dataset == 'top':
+        test = utils.TopDataLoaderWithGenerator(os.path.join(flags.folder,'newh5/', 'test.hdf5'),rank = hvd.rank(),size = hvd.size())
         
     return test
 
@@ -74,7 +75,7 @@ def sample_data(test, model, flags, sample_name):
     if flags.ideal:
         j = test.preprocess_jet(test.jet)
     else:
-        file_name = os.path.join(flags.folder, 'JetNet', 'PET_jetnet150_8_local_layer_scale_token_baseline_generator.h5')
+        file_name = os.path.join(flags.folder, 'jetnet', 'test_top.h5')
         y = h5.File(file_name)['pid'][:]
 
     if flags.top:
@@ -83,25 +84,17 @@ def sample_data(test, model, flags, sample_name):
 
     
     nsplit = 400 if '150' in flags.dataset else 10
-    p, j = model.generate(y, jets=j, nsplit=nsplit,use_tqdm=hvd.rank()==0)
-    p = test.revert_preprocess(p, p[:, :, 2] != 0)
-    j = test.revert_preprocess_jet(j)
+    j = model.generate(y, jets=j, nsplit=nsplit,use_tqdm=hvd.rank()==0)
 
-    particles_gen = hvd.allgather(tf.constant(p)).numpy()
-    jets_gen = hvd.allgather(tf.constant(j)).numpy()
-    y = hvd.allgather(tf.constant(y)).numpy()
+    jets_gen = tf.constant(j).numpy()
 
     if hvd.rank() == 0:
         with h5.File(sample_name, "w") as h5f:
-            h5f.create_dataset("data", data=particles_gen)
             h5f.create_dataset("jet", data=jets_gen)
-            h5f.create_dataset("pid", data=y)
             
 def get_generated_data(sample_name,keep_top=False):
     with h5.File(sample_name,"r") as h5f:
         jets_gen = h5f['jet'][:]
-        particles_gen = h5f['data'][:,:,:3]        
-        flavour_gen = h5f['pid'][:jets_gen.shape[0]]
         
     if keep_top:
         mask_pid = np.argmax(flavour_gen,-1) == 2    
@@ -209,7 +202,7 @@ def main():
     utils.setup_gpus()
     if hvd.rank()==0:logging.info("Horovod and GPUs initialized successfully.")
     flags = parse_arguments()
-    sample_name = os.path.join(flags.folder, 'JetNet', utils.get_model_name(flags, flags.fine_tune, add_string='_ideal' if flags.ideal else "").replace(".weights.h5", ".h5"))
+    sample_name = os.path.join(flags.folder, 'jetnet', utils.get_model_name(flags, flags.fine_tune, add_string='_ideal' if flags.ideal else "").replace(".weights.h5", ".h5"))
     
     if flags.sample:
         if hvd.rank()==0:logging.info("Sampling the data.")

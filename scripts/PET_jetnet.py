@@ -375,23 +375,23 @@ class PET_jetnet(keras.Model):
 
             jet_info.append(jet)
             
-            nparts = np.expand_dims(np.clip(utils.revert_npart(jet[:,-1],name=str(self.max_part)),
-                                            5,self.max_part),-1) #5 is the minimum in the datasets used for training
+            # nparts = np.expand_dims(np.clip(utils.revert_npart(jet[:,-1],name=str(self.max_part)),
+            #                                 5,self.max_part),-1) #5 is the minimum in the datasets used for training
 
-            mask = np.expand_dims(
-                np.tile(np.arange(self.max_part),(nparts.shape[0],1)) < np.tile(nparts,(1,self.max_part)),-1)
+            # mask = np.expand_dims(
+            #     np.tile(np.arange(self.max_part),(nparts.shape[0],1)) < np.tile(nparts,(1,self.max_part)),-1)
         
-            assert np.sum(np.sum(mask.reshape(mask.shape[0],-1),-1,keepdims=True)-nparts)==0, 'ERROR: Particle mask does not match the expected number of particles'
+            # assert np.sum(np.sum(mask.reshape(mask.shape[0],-1),-1,keepdims=True)-nparts)==0, 'ERROR: Particle mask does not match the expected number of particles'
 
-            parts = self.DDPMSampler(split,[self.ema_body,self.ema_head],
-                                     data_shape=[split.shape[0],self.max_part,self.num_feat],
-                                     jet=jet,
-                                     num_steps = self.num_steps,
-                                     const_shape = self.shape,
-                                     w = 0.0,
-                                     mask=mask.astype(np.float32)).numpy()
-            part_info.append(parts*mask)            
-        return np.concatenate(part_info),np.concatenate(jet_info)
+            # parts = self.DDPMSampler(split,[self.ema_body,self.ema_head],
+            #                          data_shape=[split.shape[0],self.max_part,self.num_feat],
+            #                          jet=jet,
+            #                          num_steps = self.num_steps,
+            #                          const_shape = self.shape,
+            #                          w = 0.0,
+            #                          mask=mask.astype(np.float32)).numpy()
+            # part_info.append(parts*mask)            
+        return np.concatenate(jet_info)
     
 
     def logsnr_schedule_cosine(self,t, logsnr_min=-20., logsnr_max=20.):

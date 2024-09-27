@@ -7,3 +7,5 @@ logs/
 logs_temp/
 **/logs_temp/**
 **/*.h5
+**/**.h5
+**/**.hdf5

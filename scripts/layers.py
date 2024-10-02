@@ -211,4 +211,3 @@ class LayerScale(layers.Layer):
             return inputs * self.gamma* mask
         else:
             return inputs * self.gamma
-

@@ -36,6 +36,8 @@ line_style = {
     'atlas_small_fine_tune':'dotted',
     'atlas_small':'-',
 
+    'nu_truth':'-',
+    'nu_gen':'dotted',
     't_truth':'-',
     't_gen':'dotted',
     'q_truth':'-',
@@ -85,6 +87,8 @@ colors = {
     'lhco':'#fc8d59',
     'jetclass':'black',
 
+    'nu_truth':'#1b9e77',
+    'nu_gen':'#1b9e77',
     't_truth':'#1b9e77',
     't_gen':'#1b9e77',
     'q_truth':'#e7298a',
@@ -152,6 +156,8 @@ name_translate = {
     'true':'SR data',
     'gen':'Generated Jets',
 
+    'nu_truth':'Training data',
+    'nu_gen':'Generated',
     't_truth':'Top quarks',
     't_gen':'Generated Top quarks',
     'q_truth':'Quarks',
@@ -178,34 +184,6 @@ name_translate = {
 
 
 
-def plot(jet1,jet2,flav1,flav2,nplots,title,plot_folder,is_big,names):
-    var_names = ['Jet p$_{T}$ [GeV]', 'Jet $\eta$','Jet Mass [GeV]','Multiplicity']
-    if nplots ==3:
-        var_names = ['$\eta_{rel}$', '$\phi_{rel}$', 'log($1 - p_{Trel}$)']
-    
-    for ivar in range(nplots):        
-        for i,unique in enumerate(np.unique(np.argmax(flav1,-1))):
-            mask1 = np.argmax(flav1,-1)== unique
-            mask2 = np.argmax(flav2,-1)== unique        
-            
-            feed_dict = {
-                '{}_truth'.format(names[unique]):jet1[:,ivar][mask1],
-                '{}_gen'.format(names[unique]):  jet2[:,ivar][mask2]
-            }
-            
-            if i == 0:                            
-                fig,gs,binning = HistRoutine(feed_dict,xlabel=var_names[ivar],
-                                             plot_ratio=False,
-                                             reference_name='{}_truth'.format(names[unique]),
-                                             ylabel= 'Normalized entries')
-            else:
-                fig,gs,_ = HistRoutine(feed_dict,xlabel="{}".format(i),
-                                       reference_name='{}_truth'.format(names[unique]),
-                                       plot_ratio=False,
-                                       fig=fig,gs=gs,binning=binning,
-                                       ylabel= 'Normalized entries')
-            ax0 = plt.subplot(gs[0])     
-        fig.savefig('{}/Jetnet_{}_{}.pdf'.format(plot_folder,title,ivar),bbox_inches='tight')
 
 
 
@@ -394,5 +372,4 @@ def LoadJson(file_name):
 def SaveJson(save_file,data):
     with open(save_file,'w') as f:
         json.dump(data, f)
-
 

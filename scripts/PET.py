@@ -477,8 +477,9 @@ class PET(keras.Model):
                     x3 = LayerScale(self.layer_scale_init, self.projection_dim)(x3,mask)
                 cond_token = layers.Add()([x3,x2])
 
-            encoded = layers.GroupNormalization(groups=1)(cond_token+encoded)            
-            encoded = layers.Dense(self.num_feat)(encoded)*mask
+            encoded = layers.GroupNormalization(groups=1)(cond_token+encoded)
+            encoded = layers.GlobalAveragePooling1D()(encoded)
+            encoded = layers.Dense(self.num_jet)(encoded)
         
         return encoded
 

@@ -9,7 +9,9 @@ import random
 import itertools
 import pickle, copy
 from scipy.stats import norm
+import glob
 import horovod.tensorflow.keras as hvd
+# from dummy_hvd import hvd as hvd
 
 def setup_gpus():
     hvd.init()
@@ -89,31 +91,32 @@ class DataLoader:
                 data_chunk = self.pad(data_chunk,num_pad=self.num_pad)
                 jet_chunk = self.preprocess_jet(jet_chunk)
                 
-            points_chunk = data_chunk[:, :, :2]
+            points_chunk = data_chunk[:, :, 1:3]
             
         return [data_chunk,points_chunk,mask_chunk,jet_chunk],label_chunk
 
-    def make_eval_data(self):
-        X = self.preprocess(self.X,self.mask).astype(np.float32)
-        X = self.pad(X,num_pad=self.num_pad)
-        jet = self.preprocess_jet(self.jet).astype(np.float32)
+    def make_eval_data(self,preprocess=False):
+        if preprocess:
+            X = self.preprocess(self.X,self.mask).astype(np.float32)
+            X = self.pad(X,num_pad=self.num_pad)
+            jet = self.preprocess_jet(self.jet).astype(np.float32)
+        else:
+            X = self.X
+            jet = self.jet
 
-        tf_zip = tf.data.Dataset.from_tensor_slices(
-            {'input_features':X,
-             'input_points':X[:,:,:2],
-             'input_mask':self.mask.astype(np.float32),
-             'input_jet':jet,
-             'input_time':np.zeros((self.jet.shape[0],1)),})
-                        
-        return tf_zip.cache().batch(self.batch_size).prefetch(tf.data.AUTOTUNE), self.y
+        if self.EventID is not None:
+            return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y, self.EventID, self.event_type
+        else:
+            return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y
 
     def make_tfdata(self):
         X = self.preprocess(self.X,self.mask).astype(np.float32)
         X = self.pad(X,num_pad=self.num_pad)
         jet = self.preprocess_jet(self.jet).astype(np.float32)
+
         tf_zip = tf.data.Dataset.from_tensor_slices(
             {'input_features':X,
-             'input_points':X[:,:,:2],
+             'input_points':X[:,:,1:3],
              'input_mask':self.mask.astype(np.float32),
              'input_jet':jet})
         
@@ -123,6 +126,7 @@ class DataLoader:
         gc.collect()
         
         return tf.data.Dataset.zip((tf_zip,tf_y)).cache().shuffle(self.batch_size*100).batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
+
 
     def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
         # self.path = path
@@ -144,334 +148,20 @@ class DataLoader:
 
     def preprocess_jet(self,x):        
         return (x-self.mean_jet)/self.std_jet
-
+    
     def revert_preprocess(self,x,mask):                
         num_feat = x.shape[-1]        
         new_part = mask[:,:, None]*(x[:,:,:num_feat]*self.std_part[:num_feat] + self.mean_part[:num_feat])
-        #log pt rel and log e rel  should always be negative or 0
-        new_part[:,:,2] = np.minimum(new_part[:,:,2],0.0)
         return  new_part
 
     def revert_preprocess_jet(self,x):
 
         new_x = self.std_jet*x+self.mean_jet
         #Convert multiplicity back into integers
-        new_x[:,-1] = np.round(new_x[:,-1])
-        new_x[:,-1] = np.clip(new_x[:,-1],1,self.num_part)
         return new_x
 
 
-class EicPythiaDataLoader(DataLoader):
-    '''based off jetnet. No jets, just events and particles'''
 
-    def __init__(self, path, batch_size=512,rank=0,size=1):
-        super().__init__(path, batch_size, rank, size)
-
-        self.mean_part = [-6.57722423e-01, -1.32635604e-04, -1.35429178,
-                          0.0, 0.0, 0.0,0.0, 0.0, 0.0,0.0, 0.0, 0.0,0.0]
-        self.std_part = [1.43289689, 0.95137615, 1.49257704,
-                         1.0, 1.0, 1.0,1.0, 1.0, 1.0,1.0, 1.0, 1.0,1.0]
-        self.mean_jet = [ 6.48229788, -2.52708796,  21.66242333]
-        self.std_jet  = [2.82288916, 0.4437837,  8.86935969]
-        
-        self.part_names = ['$\eta_{rel}$', '$\phi_{rel}$', 'log($p_{Trel}$)',
-                           'charge','is proton','is neutron','is kaon',
-                           'is pion', 'is neutrino',
-                           'is muon', 'is electron',
-                           'is photon', 'is pi0']
-        self.jet_names = ['electron $p_T$ [GeV]','electron $\eta$','Multiplicity']
-
-            
-        def add_noise(self,x,shape=None):
-            #Add noise to the event multiplicity
-            if shape is None:
-                noise = np.random.uniform(-0.3,0.3,x.shape[0])
-                x[:,-1]+=noise[:,None]
-            else:
-                noise = np.random.uniform(-0.3,0.3,shape)
-                x[:,:,4:]+=noise[:,None]
-            return x
-            
-        def preprocess_jet(self,x):
-            #new_x = self.add_noise(copy.deepcopy(x))
-            return (new_x-self.mean_jet)/self.std_jet
-
-        def preprocess(self,x,mask):                
-            num_feat = x.shape[-1]
-            #new_x = self.add_noise(copy.deepcopy(x),x[:,:,4:].shape)
-            return mask[:,:, None]*(new_x[:,:,:num_feat]-self.mean_part[:num_feat])/self.std_part[:num_feat]
-
-
-        self.load_data(path, batch_size,rank,size)
-        #the model is not conditioned
-        self.y = np.zeros((self.X.shape[0],1))
-        if rank ==0:
-            print(f"Loaded dataset with {self.num_part} particles")
-        self.num_feat = self.X.shape[2]
-        self.num_classes = self.y.shape[1]
-        self.num_pad = 0
-        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
-        self.files = [path]
-
-    def revert_preprocess(self,x,mask):                
-        num_feat = x.shape[-1]        
-        new_part = mask[:,:, None]*(x[:,:,:num_feat]*self.std_part[:num_feat] + self.mean_part[:num_feat])
-        #one hot encode the pids again
-        max_indices = np.argmax(new_part[:,:,4:], axis=-1)
-        pids = np.zeros_like(new_part[:,:,4:])
-        pids[np.arange(new_part.shape[0])[:, None], np.arange(new_part.shape[1]), max_indices] = 1
-        new_part[:,:,4:] = pids
-        
-        return  new_part
-
-
-
-class JetNetDataLoader(DataLoader):
-    def __init__(self, path, batch_size=512,rank=0,size=1,big=False):
-        super().__init__(path, batch_size, rank, size)
-        if big:
-            self.mean_part = [0.0, 0.0, -0.0217,
-                              1.895,-0.022, 2.13, 0.0,
-                              0.0, 0.0,  0.0,  0.0,  0.0, 0.0]
-            self.std_part = [0.115, 0.115, -0.054,  
-                             1.549, 0.054,1.57,1.0,
-                             1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            
-            self.mean_jet =  [1.0458962e+03, 3.6804923e-03, 9.4020386e+01, 4.9398304e+01]
-            self.std_jet  = [123.23525 ,0.7678173 ,43.103817 ,20.772703 ]
-        else:
-            self.mean_part = [0.0, 0.0, -0.035,
-                              2.791,-0.035, 3.03, 0.0,
-                              0.0, 0.0,  0.0,  0.0,  0.0, 0.0]
-            self.std_part = [0.09, 0.09,  0.067, 
-                             1.241, 0.067,1.26,1.0,
-                             1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            
-            self.mean_jet =  [1.0458962e+03, 3.6804923e-03, 9.4020386e+01, 2.9036360e+01]
-            self.std_jet  = [123.23525 ,0.7678173 ,43.103817 ,2.76302]
-            
-        def add_noise(self,x):
-            #Add noise to the jet multiplicity
-            noise = np.random.uniform(-0.5,0.5,x.shape[0])
-            x[:,-1]+=noise[:,None]
-            return x
-            
-        def preprocess_jet(self,x):
-            new_x = self.add_noise(copy.deepcopy(x))
-            return (new_x-self.mean_jet)/self.std_jet
-
-
-        self.load_data(path, batch_size,rank,size)
-        self.big = big        
-        self.num_pad = 6
-        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
-        self.num_classes = self.y.shape[1]
-        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
-        self.files = [path]
-
-
-
-class LHCODataLoader(DataLoader):
-    def __init__(self, path, batch_size=512,rank=0,size=1,
-                 mjjmin=2300,
-                 mjjmax=5000,nevts = -1):
-        super().__init__(path, batch_size, rank, size)
-
-        self.mean_part = [0.0, 0.0, -0.019,
-                          1.83,-0.019, 2.068, 0.0,
-                          0.0, 0.0,  0.0,  0.0,  0.0, 0.0]
-        self.std_part = [0.26, 0.26,  0.066, 
-                         1.452, 0.064,1.46,1.0,
-                         1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-
-        self.mean_jet =  [ 1.28724651e+03, -4.81260266e-05, 0.0 , 2.05052711e+02, 5.72253125e+01]
-        self.std_jet = [244.15460668 ,0.74111563, 1.0 ,151.10313677, 29.44343823]
-
-        
-        self.path = path
-        if nevts <0:
-            self.nevts = h5.File(self.path,'r')['jet'].shape[0]
-        else:
-            self.nevts = nevts
-        self.size = size
-
-        self.jet = h5.File(self.path,'r')['jet'][rank:int(self.nevts):size]
-        self.X = h5.File(self.path,'r')['data'][rank:int(self.nevts):size]
-        #Min pT cut 
-        self.X = self.X*(self.X[:,:,:,3:4]>-0.0)
-
-        if 'pid' in h5.File(self.path,'r'):
-            self.raw_y = h5.File(self.path,'r')['pid'][rank:int(self.nevts):size]
-        else:
-            self.raw_y = self.get_dimass(self.jet)
-            
-        self.y = self.prep_mjj(self.raw_y)
-
-        self.mask = self.X[:,:,:,2]!=0
-        self.batch_size = batch_size
-        
-        self.num_part = self.X.shape[2]
-        self.num_pad = 6
-        self.num_feat = self.X.shape[3] + self.num_pad #missing inputs
-        self.num_jet = self.jet.shape[2]
-        self.num_classes = 1
-        self.steps_per_epoch = None
-        self.files = [path]
-        self.label = np.zeros((self.y.shape[0],1))
-        
-
-    def LoadMjjFile(self,folder,file_name,use_SR,mjjmin=2300,mjjmax=5000):    
-        with h5.File(os.path.join(folder,file_name),"r") as h5f:
-            mjj = h5f['mjj'][:]
-
-        mask = self.get_mjj_mask(mjj,use_SR,mjjmin,mjjmax)
-        mjj = self.prep_mjj(mjj)
-        return mjj[mask]
-        
-    def prep_mjj(self,mjj,mjjmin=2300,mjjmax=5000):
-        new_mjj = (mjj - mjjmin)/(mjjmax - mjjmin)
-        #new_mjj = (np.log(mjj) - np.log(mjjmin))/(np.log(mjjmax) - np.log(mjjmin))
-        new_mjj = 2*new_mjj -1.0
-        new_mjj = np.stack([new_mjj,np.ones_like(new_mjj)],-1)
-        return new_mjj.astype(np.float32)
-
-    def revert_mjj(self,mjj,mjjmin=2300,mjjmax=5000):
-        x = (mjj[:,0] + 1.0)/2.0        
-        x = x * ( mjjmax - mjjmin ) + mjjmin
-        return x
-        logmin = np.log(mjjmin)
-        logmax = np.log(mjjmax)
-        x = mjj * ( logmax - logmin ) + logmin
-        return np.exp(x)
-        
-    def get_dimass(self,jets):
-        jet_e = np.sqrt(jets[:,0,3]**2 + jets[:,0,0]**2*np.cosh(jets[:,0,1])**2)
-        jet_e += np.sqrt(jets[:,1,3]**2 + jets[:,1,0]**2*np.cosh(jets[:,1,1])**2)
-        jet_px = jets[:,0,0]*np.cos(jets[:,0,2]) + jets[:,1,0]*np.cos(jets[:,1,2])
-        jet_py = jets[:,0,0]*np.sin(jets[:,0,2]) + jets[:,1,0]*np.sin(jets[:,1,2])
-        jet_pz = jets[:,0,0]*np.sinh(jets[:,0,1]) + jets[:,1,0]*np.sinh(jets[:,1,1])
-        mjj = np.sqrt(np.abs(jet_px**2 + jet_py**2 + jet_pz**2 - jet_e**2))
-        return mjj
-    
-    def get_mjj_mask(self,mjj,use_SR,mjjmin,mjjmax):
-        if use_SR:
-            mask_region = (mjj>3300) & (mjj<3700)
-        else:
-            mask_region = ((mjj<3300) & (mjj>mjjmin)) | ((mjj>3700) & (mjj<mjjmax))
-        return mask_region
-
-    def pad(self,x,num_pad):
-        return np.pad(x, pad_width=((0, 0), (0, 0), (0, 0), (0, num_pad)),
-                      mode='constant', constant_values=0)
-
-    def make_eval_data(self):
-        X = self.preprocess(self.X,self.mask).astype(np.float32)
-        X = self.pad(X,num_pad=self.num_pad)
-        jet = self.preprocess_jet(self.jet).astype(np.float32)
-
-        tf_zip = tf.data.Dataset.from_tensor_slices(
-            {'input_features':X,
-             'input_points':X[:,:,:,:2],
-             'input_mask':self.mask.astype(np.float32),
-             'input_jet':jet,
-             'input_mass': self.y[:,0],
-             'input_time':np.zeros((self.jet.shape[0],2,1)),})
-                        
-        return tf_zip.cache().batch(self.batch_size).prefetch(tf.data.AUTOTUNE), self.label
-
-    def add_noise(self,x):
-        #Add noise to the jet multiplicity
-        noise = np.random.uniform(-0.5,0.5,x.shape[0])
-        x[:,:,-1]+=noise[:,None]
-        return x
-    
-    def make_tfdata(self,classification=False):
-        X = self.preprocess(self.X,self.mask).astype(np.float32)
-        X = self.pad(X,num_pad=self.num_pad)
-        jet = self.add_noise(self.jet)
-        jet = self.preprocess_jet(jet).astype(np.float32)
-        tf_zip = tf.data.Dataset.from_tensor_slices(
-            {'input_features':X,
-             'input_points':X[:,:,:,:2],
-             'input_mask':self.mask.astype(np.float32),
-             'input_mass':self.y[:,0],
-             'input_jet':jet})
-        
-        if classification:
-            tf_y = tf.data.Dataset.from_tensor_slices(np.concatenate([self.label,self.w],-1))
-        else:
-            tf_y = tf.data.Dataset.from_tensor_slices(self.y)
-        del self.X, self.y,  self.mask
-        gc.collect()
-        
-        return tf.data.Dataset.zip((tf_zip,tf_y)).cache().shuffle(self.batch_size*100).batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
-
-    def combine(self,datasets,use_weights=False):        
-        for dataset in datasets:
-            self.nevts += dataset.nevts
-            self.X = np.concatenate([self.X,dataset.X],0)
-            self.mask = np.concatenate([self.mask,dataset.mask],0)
-            self.jet = np.concatenate([self.jet,dataset.jet],0)
-            self.label = np.concatenate([self.label,np.ones((dataset.y.shape[0],1))],0)
-            self.y = np.concatenate([self.y,dataset.y],0)
-            if use_weights:
-                self.w = np.concatenate([self.w,np.ones((dataset.y.shape[0],1))],0)
-        if use_weights:
-            self.X,self.mask,self.jet,self.label,self.y,self.w = shuffle(
-                self.X,self.mask,self.jet,self.label,self.y,self.w)
-        else:
-            self.X,self.mask,self.jet,self.label,self.y= shuffle(self.X,self.mask,self.jet,self.label,self.y)
-        
-        #Update parameters        
-        #self.steps_per_epoch = int(self.nevts//self.size//self.batch_size)
-
-    def data_from_file(self,file_path):
-        with h5.File(file_path, 'r') as file:
-            data_chunk = file['data'][:]
-            N,J,P,F = data_chunk.shape
-            mask_chunk = data_chunk[:, :, :,2] != 0  
-
-
-            jet_chunk = file['jet'][:]
-            label_chunk = self.get_dimass(jet_chunk)
-                        
-            data_chunk = self.preprocess(data_chunk, mask_chunk)
-            data_chunk = self.pad(data_chunk,num_pad=self.num_pad)
-            jet_chunk = self.preprocess_jet(jet_chunk)
-            points_chunk = data_chunk[:, :, :,:2]            
-            data_chunk = data_chunk.reshape(N*J,P,-1)
-            jet_chunk = jet_chunk.reshape(N*J,-1)
-            
-        return [data_chunk,points_chunk,mask_chunk,jet_chunk],label_chunk
-
-
-    def preprocess_jet(self,x):
-        #Transform phi from uniform to gaussian
-        new_x = copy.deepcopy(x)
-        new_x[:,:,2] = norm.ppf(0.5*(1.0 + x[:,:,2]/np.pi))
-        return (new_x-self.mean_jet)/self.std_jet
-
-    def preprocess(self,x,mask):        
-        num_feat = x.shape[-1]
-        return mask[:,:,:, None]*(x[:,:,:,:num_feat]-self.mean_part[:num_feat])/self.std_part[:num_feat]
-
-    def revert_preprocess(self,x,mask):                
-        num_feat = x.shape[-1]
-
-        new_part = mask[:,:,:, None]*(x[:,:,:,:num_feat]*self.std_part[:num_feat] + self.mean_part[:num_feat])
-        #log pt rel should always be negative or 0
-        new_part[:,:,:,2] = np.minimum(new_part[:,:,:,2],0.0)
-        return  new_part
-        
-    def revert_preprocess_jet(self,x):
-        new_x = self.std_jet*x+self.mean_jet
-        #Recover phi
-        new_x[:,:,2] = np.pi*(2*norm.cdf(new_x[:,:,2]) -1.0)
-        new_x[:,:,2] = np.clip(new_x[:,:,2],-np.pi,np.pi)
-        #Convert multiplicity back into integers
-        new_x[:,:,-1] = np.round(new_x[:,:,-1])
-        new_x[:,:,-1] = np.clip(new_x[:,:,-1],2,self.num_part)
-        return new_x
 
 class TopDataLoader(DataLoader):    
     def __init__(self, path, batch_size=512,rank=0,size=1):
@@ -481,11 +171,361 @@ class TopDataLoader(DataLoader):
         self.num_pad = 6
         self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
         
-        self.y = np.identity(2)[self.y.astype(np.int32)]
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
         self.num_classes = self.y.shape[1]
         self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
         self.files = [path]
 
+class TopDataLoaderWithGenerator(DataLoader):    
+    def __init__(self, path, batch_size=512,rank=0,size=1):
+        super().__init__(path, batch_size, rank, size)
+
+        self.load_data(path, batch_size,rank,size)
+
+        self.mean_part = [3.70747896e+01, 0.0,  0.0,  1.16020465e+01,  0.0]
+        self.std_part =  [71.52596521,  1.0,  1.0, 55.33589808,  1.0]
+        self.mean_jet = [-0.16206509,  0.05322177, -2.457497]
+        self.std_jet  = [112.16817, 112.59142, 242.80714]
+        
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
+        
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+
+    def get_pxyz(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        E = arr[:,3]
+        px = pT*np.cos(phi)
+        py = pT*np.sin(phi)
+        pz = pT*np.sinh(eta)
+        return np.stack([px,py,pz],-1)
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
+        self.path = path
+        # self.y is what we are trying to predict
+        self.X = h5.File(self.path,'r')['jets'][rank:nevts:size][:,:,:4] #jet 4vector
+        #add a zero label to identify jets
+        self.X = np.concatenate([self.X,np.zeros((self.X.shape[0],self.X.shape[1],1))],-1)
+        self.y_t = h5.File(self.path,'r')['regress'][rank:nevts:size]
+        self.p_t = h5.File(self.path,'r')['fjets'][rank:nevts:size]
+        self.lep = self.p_t[:,4:8] #lepton 4vector
+        #add a one for leptons
+        self.lep = np.concatenate([self.lep,np.ones((self.X.shape[0],1))],-1)
+        self.jet = self.y_t[:,10:] #neutrino 4vector
+        self.jet = self.get_pxyz(self.jet)
+        self.X = np.concatenate([self.lep[:,None],self.X],axis=1)
+        
+        self.y = np.concatenate([self.p_t[:,14].reshape(-1,1),self.p_t[:,17].reshape(-1,1)],axis=1) #met pT, met_phi
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = h5.File(self.path,'r')['jets'].shape[0] if nevts is None else nevts
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
+
+class TruthTotalTauDataLoaderWithNpz(DataLoader):
+    def __init__(self, path, batch_size=512,rank=0,size=1, data_type='train'):
+        super().__init__(path, batch_size, rank, size)
+
+        self.load_data(path, batch_size,rank,size, data_type)
+
+        self.mean_part = [9.53190298e+00, 0.0,  0.0, 1.12493561e+02, 0.0]
+        self.std_part =  [9.40143725,  1.0,  1.0, 233.26712552,  1.0]
+        self.mean_jet = [-1.0836015, 1.6860425, 2.312119, -0.8071776, 1.2596784, 1.8461846]
+        self.std_jet  = [11.045118, 11.041079, 269.44342, 13.143577, 13.144216, 356.6083]
+        
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
+        
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+
+    def get_pxyz(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        px = pT*np.cos(phi)
+        py = pT*np.sin(phi)
+        pz = pT*np.sinh(eta)
+        return np.stack([px,py,pz],-1)
+    
+    def get_ptetaphiE(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        m = arr[:,3]
+        E = np.sqrt(pT**2 + m**2 + (pT*np.sinh(eta))**2)
+        return np.stack([pT,eta,phi,E],-1)
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None,data_type='train'):
+        self.path = path
+        path_list = glob.glob(self.path + '**/**/*.npz')
+        self.data_type = data_type
+        # Load all the data from the npz files
+        jet_1 = None
+        jet_2 = None
+        jet_3 = None
+        MET = None
+        Type = None
+        EventID = None
+        tau_p_child1 = None
+        tau_p_child2 = None
+        tau_m_child1 = None
+        tau_m_child2 = None
+        nu_p = None
+        nu_m = None
+        for i in range(len(path_list)):
+            data = np.load(path_list[i])
+            # print("Type: {}, Number: {}".format(data["Type"][0], data['jet_1'].shape[0]))
+            if i == 0:
+                jet_1 = data['jet_1']
+                jet_2 = data['jet_2']
+                jet_3 = data['jet_3']
+                MET = data['MET']
+                Type = data['Type']
+                EventID = data['EventID']
+                tau_p_child1 = self.get_ptetaphiE(data['tau_p_child1'])
+                tau_p_child2 = self.get_ptetaphiE(data['tau_p_child2'])
+                tau_m_child1 = self.get_ptetaphiE(data['tau_m_child1'])
+                tau_m_child2 = self.get_ptetaphiE(data['tau_m_child2'])
+                nu_p = self.get_pxyz(data['nu_p'])
+                nu_m = self.get_pxyz(data['nu_m'])
+            else:
+                jet_1 = np.concatenate((jet_1, data['jet_1']))
+                jet_2 = np.concatenate((jet_2, data['jet_2']))
+                jet_3 = np.concatenate((jet_3, data['jet_3']))
+                MET = np.concatenate((MET, data['MET']))
+                Type = np.concatenate((Type, data['Type']))
+                EventID = np.concatenate((EventID, data['EventID']))
+                tau_p_child1 = np.concatenate((tau_p_child1, self.get_ptetaphiE(data['tau_p_child1'])))
+                tau_p_child2 = np.concatenate((tau_p_child2, self.get_ptetaphiE(data['tau_p_child2'])))
+                tau_m_child1 = np.concatenate((tau_m_child1, self.get_ptetaphiE(data['tau_m_child1'])))
+                tau_m_child2 = np.concatenate((tau_m_child2, self.get_ptetaphiE(data['tau_m_child2'])) )  
+                nu_p = np.concatenate((nu_p, self.get_pxyz(data['nu_p'])))
+                nu_m = np.concatenate((nu_m, self.get_pxyz(data['nu_m'])))
+        # For truth level study, self.X are all the truth tau children
+        self.X = np.concatenate([tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1]), tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1])], axis=1)
+        #add a one label to identify particles
+        self.X = np.concatenate([self.X,np.ones((self.X.shape[0],self.X.shape[1],1))],-1)
+        # For truth level study, self.jet are the truth 
+        self.jet = np.concatenate([nu_m, nu_p], axis=1)
+        # For truth level study, self.y are the MET
+        self.y = MET #met pT, met_phi
+        # Then we would shuffle the data for training and testing, then we would split the data into training and testing
+        if self.data_type == 'train':
+            shuffle_ix = np.random.permutation(np.arange(len(self.X)))
+            np.save("shuffle_ix.npy", shuffle_ix)
+            self.X = self.X[shuffle_ix]
+            self.jet = self.jet[shuffle_ix]
+            self.y = self.y[shuffle_ix]
+            self.X = self.X[:int(0.7*self.X.shape[0])]
+            self.jet = self.jet[:int(0.7*self.jet.shape[0])]
+            self.y = self.y[:int(0.7*self.y.shape[0])]
+        elif self.data_type == 'test':
+            shuffle_ix = np.load("shuffle_ix.npy")
+            self.X = self.X[shuffle_ix]
+            self.jet = self.jet[shuffle_ix]
+            self.y = self.y[shuffle_ix]
+            self.X = self.X[int(0.7*self.X.shape[0]):int(0.9*self.X.shape[0])]
+            self.jet = self.jet[int(0.7*self.jet.shape[0]):int(0.9*self.jet.shape[0])]
+            self.y = self.y[int(0.7*self.y.shape[0]):int(0.9*self.y.shape[0])]    
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = self.X.shape[0] 
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
+
+class TruthTotalTauDataLoaderWithNpzForSample(DataLoader):
+    def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None, data_type='val'):
+        super().__init__(path, batch_size, rank, size)
+
+        self.load_data(path, batch_size,rank,size,nevts, data_type)
+
+        self.mean_part = [9.53190298e+00, 0.0,  0.0, 1.12493561e+02, 0.0]
+        self.std_part =  [9.40143725,  1.0,  1.0, 233.26712552,  1.0]
+        self.mean_jet = [-1.0836015, 1.6860425, 2.312119, -0.8071776, 1.2596784, 1.8461846]
+        self.std_jet  = [11.045118, 11.041079, 269.44342, 13.143577, 13.144216, 356.6083]
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
+        
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+
+    def get_pxyz(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        px = pT*np.cos(phi)
+        py = pT*np.sin(phi)
+        pz = pT*np.sinh(eta)
+        return np.stack([px,py,pz],-1)
+    
+    def get_ptetaphiE(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        m = arr[:,3]
+        E = np.sqrt(pT**2 + m**2 + (pT*np.sinh(eta))**2)
+        return np.stack([pT,eta,phi,E],-1)
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None,data_type='val'):
+        self.path = path
+        self.data_type = data_type
+        # Load all the data from the npz files
+        data = np.load(path)
+        val_num = -1 if nevts is None else nevts
+        jet_1 = data['jet_1'][:val_num]
+        jet_2 = data['jet_2'][:val_num]
+        jet_3 = data['jet_3'][:val_num]
+        MET = data['MET'][:val_num]
+        Type = data['Type'][:val_num]
+        EventID = data['EventID'][:val_num]
+        tau_p_child1 = self.get_ptetaphiE(data['tau_p_child1'][:val_num])
+        tau_p_child2 = self.get_ptetaphiE(data['tau_p_child2'][:val_num])
+        tau_m_child1 = self.get_ptetaphiE(data['tau_m_child1'][:val_num])
+        tau_m_child2 = self.get_ptetaphiE(data['tau_m_child2'][:val_num])
+        nu_p = self.get_pxyz(data['nu_p'][:val_num])
+        nu_m = self.get_pxyz(data['nu_m'][:val_num])
+        self.EventID = EventID
+        self.event_type = Type
+        
+        # For truth level study, self.X are all the truth tau children
+        self.X = np.concatenate([tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1]), tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1])], axis=1)
+        #add a one label to identify particles
+        self.X = np.concatenate([self.X,np.ones((self.X.shape[0],self.X.shape[1],1))],-1)
+        # For truth level study, self.jet are the truth 
+        self.jet = np.concatenate([nu_m, nu_p], axis=1)
+        # For truth level study, self.y are the MET
+        self.y = MET #met pT, met_phi
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = self.X.shape[0] 
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
+        
+class TruthTauDataLoader(DataLoader):    
+    def __init__(self, path, batch_size=512,rank=0,size=1):
+        super().__init__(path, batch_size, rank, size)
+        self.load_data(path, batch_size,rank,size)
+
+        self.mean_part = [self.mean_X[0], 0.0,  0.0, self.mean_X[3], 0.0]
+        self.std_part =  [self.std_X[0],  1.0,  1.0, self.std_X[3],  1.0]
+        self.mean_jet = list(self.mean_nu)
+        self.std_jet  = list(self.std_nu)
+        
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
+        
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
+        self.path = path
+        self.X = h5.File(self.path,'r')['X'][rank:nevts:size] #particle 4vector
+        #add two different labels to identify particles
+        self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
+        self.labels[:,2:] = 2
+        if self.X.shape[1] > 4:
+            self.labels[:,4:] = 0
+        # for padding particles, the label is 0
+        self.labels[self.X[:,:,0]==0] = 0
+        self.X = np.concatenate([self.X,self.labels],-1) #met and met_phi
+        self.y = h5.File(self.path,'r')['y'][rank:nevts:size]
+        self.jet = h5.File(self.path,'r')['nu'][rank:nevts:size]
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = h5.File(self.path,'r')['X'].shape[0] if nevts is None else nevts
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
+        self.mean_X = h5.File(self.path,'r')['mean_X'][:]
+        self.std_X = h5.File(self.path,'r')['std_X'][:]
+        self.mean_nu = h5.File(self.path,'r')['mean_nu'][:]
+        self.std_nu = h5.File(self.path,'r')['std_nu'][:]
+        if len(self.mean_X) > 4:
+            self.mean_X = np.mean(np.array(self.mean_X).reshape(-1,4),axis=0)
+            self.std_X = np.mean(np.array(self.std_X).reshape(-1,4),axis=0)
+        if len(self.mean_nu) > 6:
+            self.mean_nu = np.mean(np.array(self.mean_nu).reshape(-1,6),axis=0)
+            self.std_nu = np.mean(np.array(self.std_nu).reshape(-1,6),axis=0)
+        
+class TauDataLoaderWithGenerator(DataLoader):    
+    def __init__(self, path, batch_size=512,rank=0,size=1):
+        super().__init__(path, batch_size, rank, size)
+
+        self.load_data(path, batch_size,rank,size)
+
+        self.mean_part = [1.8371206e+01, 0.0,  0.0, 3.9444611e+01, 0.0]
+        self.std_part =  [13.570198,  1.0,  1.0, 39.287296,  1.0]
+        self.mean_jet = [[0.3682232, -0.21265848, -0.54441476], [-0.2322103, 0.20450957, 0.47339877]]
+        self.std_jet  = [[17.644945, 17.901054, 54.378494], [17.735344, 17.621115, 61.020504]]
+        
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
+        
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+
+    def get_pxyz(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        E = arr[:,3]
+        px = pT*np.cos(phi)
+        py = pT*np.sin(phi)
+        pz = pT*np.sinh(eta)
+        return np.stack([px,py,pz],-1)
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
+        self.path = path
+        # self.y is what we are trying to predict
+        self.X = h5.File(self.path,'r')['jets'][rank:nevts:size][:,:,:4] #jet 4vector
+        #add a zero label to identify jets
+        self.X = np.concatenate([self.X,np.zeros((self.X.shape[0],self.X.shape[1],1))],-1)
+        self.y_t = h5.File(self.path,'r')['regress'][rank:nevts:size]
+        self.p_t = h5.File(self.path,'r')['fjets'][rank:nevts:size]
+        self.pion = self.p_t[:,0:8].reshape(self.p_t.shape[0], 2, -1) #pion 4vector
+        #add a one for leptons
+        self.pion = np.concatenate([self.pion,np.ones((self.X.shape[0], 2, 1))],-1)
+        self.jet = self.y_t[:,:] #neutrino 4vector
+        self.jet_0 = self.get_pxyz(self.jet[:,0:4])
+        self.jet_1 = self.get_pxyz(self.jet[:,4:8])
+        # self.jet = np.concatenate([self.jet_0.reshape(self.jet_0.shape[0], self.jet_0.shape[-1]), self.jet_1.reshape(self.jet_1.shape[0], self.jet_1.shape[-1])], axis=1)
+        self.jet = np.concatenate([self.jet_0.reshape(self.jet_0.shape[0], 1, self.jet_0.shape[-1]), self.jet_1.reshape(self.jet_1.shape[0], 1, self.jet_1.shape[-1])], axis=1)
+        self.X = np.concatenate([self.pion,self.X],axis=1)
+        
+        self.y = np.concatenate([self.p_t[:,16].reshape(-1,1),self.p_t[:,18].reshape(-1,1)],axis=1) #met pT, met_phi
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = h5.File(self.path,'r')['jets'].shape[0] if nevts is None else nevts
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
         
 
 class ToyDataLoader(DataLoader):    
@@ -574,7 +614,7 @@ class AtlasDataLoader(DataLoader):
         jet = self.preprocess_jet(self.jet).astype(np.float32)
         tf_zip = tf.data.Dataset.from_tensor_slices(
             {'input_features':X,
-             'input_points':X[:,:,:2],
+             'input_points':X[:,:,1:3],
              'input_mask':self.mask.astype(np.float32),
              'input_jet':jet})
 
@@ -648,7 +688,7 @@ class OmniDataLoader(DataLoader):
         X = self.preprocess(X,mask).astype(np.float32)
         X = self.pad(X,num_pad=self.num_pad)
         jet = self.preprocess_jet(jet).astype(np.float32)
-        coord = X[:,:,:2]
+        coord = X[:,:,0:2]
         return [X,coord,mask,jet,time]
 
 

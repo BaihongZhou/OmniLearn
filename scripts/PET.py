@@ -15,7 +15,7 @@ class PET(keras.Model):
                  num_keep = 7, #Number of features that wont be dropped
                  feature_drop = 0.1,
                  projection_dim = 128,
-                 local = True, K = 10,
+                 local = True, K = 2,
                  num_local = 2, 
                  num_layers = 8, num_class_layers=2,
                  num_gen_layers = 2,
@@ -477,8 +477,9 @@ class PET(keras.Model):
                     x3 = LayerScale(self.layer_scale_init, self.projection_dim)(x3,mask)
                 cond_token = layers.Add()([x3,x2])
 
-            encoded = layers.GroupNormalization(groups=1)(cond_token+encoded)            
-            encoded = layers.Dense(self.num_feat)(encoded)*mask
+            encoded = layers.GroupNormalization(groups=1)(cond_token+encoded)
+            encoded = layers.GlobalAveragePooling1D()(encoded)
+            encoded = layers.Dense(self.num_jet)(encoded)
         
         return encoded
 

@@ -438,9 +438,74 @@ class TruthTauDataLoader(DataLoader):
         self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
         self.files = [path]
     
+    def multipl_sample(self, X, y, jet, mul=10):
+        import vector
+        final_X = []
+        final_y = []
+        final_jet = []
+        for i in range(mul):
+            if i == 0:
+                final_X = X
+                final_y = y
+                final_jet = jet
+            else:
+                np.random.seed(i*128)
+                random_beta = np.random.normal(0, (i+1)/2, size=(X.shape[0], ))
+                random_beta[random_beta < -0.2] = -0.2
+                random_beta[random_beta > 0.2] = 0.2
+                temp_X = []
+                temp_jet = []
+                for j in range(X.shape[1]):
+                    temp = vector.arr({
+                        'pt': X[:, j, 0],
+                        'eta': X[:, j, 1],
+                        'phi': X[:, j, 2],
+                        'E': X[:, j, 3],
+                    })
+                    temp = temp.boostZ(random_beta)
+                    temp_arr = np.array([temp.pt, temp.eta, temp.phi, temp.E]).reshape(-1, 1, 4)
+                    # temp_arr = np.nan_to_num(temp_arr)
+                    if j == 0:
+                        temp_X = temp_arr
+                    else:
+                        temp_X = np.concatenate((temp_X, temp_arr), axis=1)
+                    del temp
+                    if np.isnan(temp_X).any():
+                        raise ValueError("temp X contains NaN values!")
+                final_X = np.concatenate((final_X, temp_X), axis=0)
+                del temp_X
+                jet_t = jet.reshape(-1, 2, 3)
+                for j in range(jet_t.shape[1]):
+                    temp = vector.arr({
+                        'px': jet_t[:, j, 0],
+                        'py': jet_t[:, j, 1],
+                        'pz': jet_t[:, j, 2],
+                        'm': np.zeros(jet_t.shape[0]),
+                    })
+                    temp = temp.boostZ(random_beta)
+                    if j == 0:
+                        temp_jet = np.array([temp.px, temp.py, temp.pz]).reshape(-1, 3)
+                    else:
+                        temp_jet = np.concatenate((temp_jet, np.array([temp.px, temp.py, temp.pz]).reshape(-1, 3)), axis=1)
+                    del temp
+                    if np.isnan(temp_jet).any():
+                        raise ValueError("temp jet contains NaN values!")
+                final_jet = np.concatenate((final_jet, temp_jet), axis=0)
+                del temp_jet, jet_t
+                final_y = np.concatenate((final_y, y), axis=0)
+                print("Finish multiple times: {}".format(i))
+                print("Final X shape: {}".format(final_X.shape))
+                print("Final y shape: {}".format(final_y.shape))
+                print("Final jet shape: {}".format(final_jet.shape))
+        return final_X, final_y, final_jet
+    
     def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
         self.path = path
-        self.X = h5.File(self.path,'r')['X'][rank:nevts:size] #particle 4vector
+        self.X = h5.File(self.path,'r')['X'][rank:nevts:size]
+        self.y = h5.File(self.path,'r')['y'][rank:nevts:size]
+        self.jet = h5.File(self.path,'r')['nu'][rank:nevts:size]
+        #let's normalize the met pT
+        self.X, self.y, self.jet = self.multipl_sample(self.X, self.y, self.jet)
         #add two different labels to identify particles
         self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
         self.labels[:,2:] = 2
@@ -448,13 +513,9 @@ class TruthTauDataLoader(DataLoader):
             self.labels[:,4:] = 0
         # for padding particles, the label is 0
         self.labels[self.X[:,:,0]==0] = 0
-        self.X = np.concatenate([self.X,self.labels],-1) #met and met_phi
-        self.y = h5.File(self.path,'r')['y'][rank:nevts:size]
-        self.jet = h5.File(self.path,'r')['nu'][rank:nevts:size]
-        #let's normalize the met pT
+        self.X = np.concatenate([self.X,self.labels],-1)
         self.y[:,0] = np.log(self.y[:,0])
         self.mask = self.X[:,:,2]!=0
-
         # self.batch_size = batch_size
         self.nevts = h5.File(self.path,'r')['X'].shape[0] if nevts is None else nevts
         self.num_part = self.X.shape[1]

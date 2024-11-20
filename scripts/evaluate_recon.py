@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
-    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/", help="Folder containing input files")
+    # parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/", help="Folder containing input files")
+    parser.add_argument("--folder", default="/pscratch/sd/b/baihong/data/NumpyData/reco/", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
     parser.add_argument("--local", action='store_true', help="Use local embedding")
@@ -52,7 +53,8 @@ def get_data_info(flags):
 def load_data_and_model(flags):
     
     truth_path = flags.folder
-    truth_path_list = glob.glob(truth_path + '**/ml_export/*_recon.npz')
+    # truth_path_list = glob.glob(truth_path + '**/ml_export/*_recon.npz')
+    truth_path_list = glob.glob(truth_path + 'ml_export/*_3_recon.npz')
     test_loader_list = []
     for truth_path in truth_path_list:
         test_loader_list.append(utils.RecoTauDataLoaderWithNpzForçSample(truth_path,rank=hvd.rank(),size=hvd.size(),nevts=-1,data_type='val'))

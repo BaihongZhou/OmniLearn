@@ -27,7 +27,7 @@ def parse_arguments():
     parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/", help="Folder containing input files")
     parser.add_argument("--mode", type=str, default="generator", help="Loss type to train the model")
     parser.add_argument("--batch", type=int, default=128, help="Batch size")
-    parser.add_argument("--epoch", type=int, default=300, help="Max epoch")
+    parser.add_argument("--epoch", type=int, default=500, help="Max epoch")
     parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
     parser.add_argument("--lr_factor", type=float, default=1.0, help="Factor to adjust learning rate")
     parser.add_argument("--fine_tune", action='store_true', default=False, help='Fine tune a model')
@@ -153,7 +153,7 @@ def main():
     callbacks = [
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
         hvd.callbacks.MetricAverageCallback(),
-        EarlyStopping(patience=200, restore_best_weights=True),
+        EarlyStopping(patience=30, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', patience=200, min_lr=1e-6)]
     checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
     print("Checkpoint name: ", checkpoint_name)
@@ -164,26 +164,29 @@ def main():
                                             period=1)
     print(f"Rank: {hvd.rank()}, Local Rank: {hvd.local_rank()}, CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
     
-    # if hvd.rank() == 0:
-    #     # callbacks.append(history)
-    #     checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
-    #     print("Checkpoint name: ", checkpoint_name)
-    #     checkpoint_path = os.path.join(flags.folder, 'checkpoints', checkpoint_name)
-    #     checkpoint_callback = ModelCheckpoint(checkpoint_path,
-    #                                           save_best_only=True, mode='auto',
-    #                                           save_weights_only=True,
-    #                                           period=1)
-        # callbacks.append(checkpoint_callback)
-    if hvd.rank() != 0:
-        print("Rank: ", hvd.rank())
+    if hvd.rank() == 0:
+        checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
+        print("Checkpoint name: ", checkpoint_name)
+        checkpoint_path = os.path.join(flags.folder, 'checkpoints', checkpoint_name)
+        checkpoint_callback = ModelCheckpoint(checkpoint_path,
+                                              save_best_only=True, mode='auto',
+                                              save_weights_only=True,
+                                              period=1)
+        callbacks.append(checkpoint_callback)
+        callbacks.append(history)
     hist = model.fit(train_loader.make_tfdata(),
                      epochs=flags.epoch,
                      validation_data=val_loader.make_tfdata(),
                      batch_size=flags.batch,
-                     callbacks=callbacks + [history, checkpoint_callback] if hvd.rank() == 0 else callbacks,
+                     callbacks=callbacks,
                      steps_per_epoch=train_loader.steps_per_epoch,
                      validation_steps=val_loader.steps_per_epoch,
-                     verbose=hvd.rank() == 0)
+                     verbose=hvd.rank() == 0,
+                     )
+    
+    if hvd.rank() ==0:
+        with open(os.path.join(flags.folder,'histories',utils.get_model_name(flags,flags.fine_tune).replace(".weights.h5",".pkl")),"wb") as f:
+            pickle.dump(hist.history, f)
 
 if __name__ == "__main__":
     main()

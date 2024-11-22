@@ -505,7 +505,7 @@ class TruthTauDataLoader(DataLoader):
         self.y = h5.File(self.path,'r')['y'][rank:nevts:size]
         self.jet = h5.File(self.path,'r')['nu'][rank:nevts:size]
         #let's normalize the met pT
-        self.X, self.y, self.jet = self.multipl_sample(self.X, self.y, self.jet)
+        # self.X, self.y, self.jet = self.multipl_sample(self.X, self.y, self.jet)
         #add two different labels to identify particles
         self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
         self.labels[:,2:] = 2

@@ -3,7 +3,7 @@ import h5py as h5
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from dummy_hvd import hvd as hvd
+import horovod.tensorflow.keras as hvd
 import argparse
 import pickle
 from PET_jetnet import PET_jetnet

@@ -97,6 +97,7 @@ class DataLoader:
 
     def make_eval_data(self,preprocess=False):
         if preprocess:
+            pion = self.X
             X = self.preprocess(self.X,self.mask).astype(np.float32)
             X = self.pad(X,num_pad=self.num_pad)
             jet = self.preprocess_jet(self.jet).astype(np.float32)
@@ -105,7 +106,7 @@ class DataLoader:
             jet = self.jet
 
         if self.EventID is not None:
-            return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y, self.EventID, self.event_type
+            return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y, self.EventID, self.event_type,pion
         else:
             return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y
 
@@ -419,17 +420,194 @@ class TruthTotalTauDataLoaderWithNpzForSample(DataLoader):
         self.nevts = self.X.shape[0] 
         self.num_part = self.X.shape[1]
         self.num_jet = self.jet.shape[1]
-        
-class TruthTauDataLoader(DataLoader):    
-    def __init__(self, path, batch_size=512,rank=0,size=1):
-        super().__init__(path, batch_size, rank, size)
-        self.load_data(path, batch_size,rank,size)
 
-        self.mean_part = [self.mean_X[0], 0.0,  0.0, self.mean_X[3], 0.0]
-        self.std_part =  [self.std_X[0],  1.0,  1.0, self.std_X[3],  1.0]
-        self.mean_jet = list(self.mean_nu)
-        self.std_jet  = list(self.std_nu)
+class RecoTauDataLoaderWithNpzForSample(DataLoader):
+    def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None, data_type='val'):
+        super().__init__(path, batch_size, rank, size)
+
+        self.load_data(path, batch_size,rank,size,nevts, data_type)
+
+        self.mean_part = [25.932678, 0.0, 0.0, 70.54288, 0.0]
+        self.std_part =  [17.061451, 1.0, 1.0, 115.62893, 1.0]
+        if self.data_type == 'Lorentz':
+            self.mean_jet = [5.766e-2, 0.0,  0.0, -1.848e-2, 0.0,  0.0]
+            self.std_jet  = [1.400e+1, 1.0,  1.0, 1.409e+1, 1.0,  1.0]
+        else:
+            self.mean_jet = [0.05766123, 0.014943519, 0.084477596, -0.01847846, -0.0021721262, -0.016755389]
+            self.std_jet  = [14.002326, 13.991539, 38.890766, 14.091634, 14.086069, 40.51254]
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
         
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+
+    def get_pxyz(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        px = pT*np.cos(phi)
+        py = pT*np.sin(phi)
+        pz = pT*np.sinh(eta)
+        return np.stack([px,py,pz],-1)
+    
+    def get_ptetaphiE(self,arr):
+        pT = arr[:,0]
+        eta = arr[:,1]
+        phi = arr[:,2]
+        m = arr[:,3]
+        E = np.sqrt(pT**2 + m**2 + (pT*np.sinh(eta))**2)
+        return np.stack([pT,eta,phi,E],-1)
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None,data_type='val'):
+        self.path = path
+        self.data_type = data_type
+        # Load all the data from the npz files
+        data = np.load(path)
+        val_num = -1 if nevts is None else nevts
+        jet_1 = self.get_ptetaphiE(data['jet_1'][rank:nevts:size])
+        jet_2 = self.get_ptetaphiE(data['jet_2'][rank:nevts:size])
+        jet_3 = self.get_ptetaphiE(data['jet_3'][rank:nevts:size])
+        MET = data['MET'][rank:nevts:size]
+        Type = data['Type'][rank:nevts:size]
+        EventID = data['EventID'][rank:nevts:size]
+        tau_p_child1 = self.get_ptetaphiE(data['tau_p_child1'][rank:nevts:size])
+        tau_p_child2 = self.get_ptetaphiE(data['tau_p_child2'][rank:nevts:size])
+        tau_m_child1 = self.get_ptetaphiE(data['tau_m_child1'][rank:nevts:size])
+        tau_m_child2 = self.get_ptetaphiE(data['tau_m_child2'][rank:nevts:size])
+        if self.data_type == 'Lorentz':
+            nu_p = data['nu_p'][rank:nevts:size]
+            nu_m = data['nu_m'][rank:nevts:size]
+        else:
+            nu_p = self.get_pxyz(data['nu_p'][rank:nevts:size])
+            nu_m = self.get_pxyz(data['nu_m'][rank:nevts:size])
+        self.EventID = EventID
+        self.event_type = Type
+        
+        # For truth level study, self.X are all the truth tau children
+        self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1])], axis=1)
+        self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
+        
+        #add a one label to identify particles
+        self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
+        self.labels[:,2:] = 2
+        if self.X.shape[1] > 4:
+            self.labels[:,4:] = 0
+        # for padding particles, the label is 0
+        self.labels[self.X[:,:,0]==0] = 0
+        self.X = np.concatenate([self.X,self.labels],-1)
+        # For truth level study, self.jet are the truth 
+        self.jet = np.concatenate([nu_m, nu_p], axis=1)
+        # For truth level study, self.y are the MET
+        self.y = MET #met pT, met_phi
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = self.X.shape[0] 
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
+
+class RecoTauDataLoaderWithPKLForSample(DataLoader):
+    def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None, data_type='val'):
+        super().__init__(path, batch_size, rank, size)
+
+        self.load_data(path, batch_size,rank,size,nevts, data_type)
+
+        self.mean_part = [25.932678, 0.0, 0.0, 70.54288, 0.0]
+        self.std_part = [17.061451, 1.0, 1.0, 115.62893, 1.0]
+        if self.data_type == 'Lorentz':
+            print("Use Lorentz")
+            self.mean_jet = [5.766e-2, 0.0,  0.0, -1.848e-2, 0.0,  0.0]
+            self.std_jet  = [1.400e+1, 1.0,  1.0, 1.409e+1, 1.0,  1.0]
+        else:
+            self.mean_jet = [0.05766123, 0.014943519, 0.084477596, -0.01847846, -0.0021721262, -0.016755389]
+            self.std_jet  = [14.002326, 13.991539, 38.890766, 14.091634, 14.086069, 40.51254]
+        self.num_pad = 0
+        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
+        
+        # self.y = np.identity(2)[self.y.astype(np.int32)]
+        self.num_classes = self.y.shape[1]
+        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
+        self.files = [path]
+    
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None,data_type='val'):
+        import vector
+        import pickle
+        self.path = path
+        self.data_type = data_type
+        # Load all the data from the npz files
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        
+        val_num = -1 if nevts is None else nevts
+        pjet_1 = data['jet_1'][rank:nevts:size]
+        pjet_2 = data['jet_2'][rank:nevts:size]
+        pjet_3 = data['jet_3'][rank:nevts:size]
+        pMET = data['MET'][rank:nevts:size]
+        EventID = data['EventID'][rank:nevts:size]
+        ptau_p_child1 = data['tau_p_constituent_1'][rank:nevts:size]
+        ptau_p_child2 = data['tau_p_constituent_2'][rank:nevts:size]
+        ptau_m_child1 = data['tau_m_constituent_1'][rank:nevts:size]
+        ptau_m_child2 = data['tau_m_constituent_2'][rank:nevts:size]
+        jet_1 = np.stack([pjet_1.pt, pjet_1.eta, pjet_1.phi, pjet_1.E], -1)
+        jet_2 = np.stack([pjet_2.pt, pjet_2.eta, pjet_2.phi, pjet_2.E], -1)
+        jet_3 = np.stack([pjet_3.pt, pjet_3.eta, pjet_3.phi, pjet_3.E], -1)
+        MET = np.stack([pMET.pt, pMET.phi], -1)
+        tau_p_child1 = np.stack([ptau_p_child1.pt, ptau_p_child1.eta, ptau_p_child1.phi, ptau_p_child1.E], -1)
+        tau_p_child2 = np.stack([ptau_p_child2.pt, ptau_p_child2.eta, ptau_p_child2.phi, ptau_p_child2.E], -1)
+        tau_m_child1 = np.stack([ptau_m_child1.pt, ptau_m_child1.eta, ptau_m_child1.phi, ptau_m_child1.E], -1)
+        tau_m_child2 = np.stack([ptau_m_child2.pt, ptau_m_child2.eta, ptau_m_child2.phi, ptau_m_child2.E], -1)
+        del pjet_1, pjet_2, pjet_3, pMET, ptau_p_child1, ptau_p_child2, ptau_m_child1, ptau_m_child2
+        
+        self.EventID = EventID
+        self.event_type = np.ones((len(EventID), 1))
+        # For truth level study, self.X are all the truth tau children
+        self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1])], axis=1)
+        self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
+        
+        #add a one label to identify particles
+        self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
+        self.labels[:,2:] = 2
+        if self.X.shape[1] > 4:
+            self.labels[:,4:] = 0
+        # for padding particles, the label is 0
+        self.labels[self.X[:,:,0]==0] = 0
+        self.X = np.concatenate([self.X,self.labels],-1)
+        # For truth level study, self.jet are the truth 
+        self.jet = np.zeros((self.X.shape[0], 6))
+        # For truth level study, self.y are the MET
+        self.y = MET #met pT, met_phi
+        #let's normalize the met pT
+        self.y[:,0] = np.log(self.y[:,0])
+        self.mask = self.X[:,:,2]!=0
+
+        # self.batch_size = batch_size
+        self.nevts = self.X.shape[0] 
+        self.num_part = self.X.shape[1]
+        self.num_jet = self.jet.shape[1]
+                
+class TruthTauDataLoader(DataLoader):
+    def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None):
+        super().__init__(path, batch_size, rank, size)
+        self.load_data(path, batch_size,rank,size,nevts)
+
+        self.mean_part = [25.932678, 0.0, 0.0, 70.54288, 0.0]
+        self.std_part =  [17.061451, 1.0, 1.0, 115.62893, 1.0]
+        if np.any(self.jet[:,2] > 4):
+            # self.mean_jet = list(self.mean_nu)
+            # self.std_jet  = list(self.std_nu)
+            self.mean_jet = [0.05766123, 0.014943519, 0.084477596, -0.01847846, -0.0021721262, -0.016755389]
+            self.std_jet = [14.002326, 13.991539, 38.890766, 14.091634, 14.086069, 40.51254]
+        else:
+            self.mean_jet = [self.mean_jet[0], 0.0, 0.0, self.mean_jet[3], 0.0, 0.0]
+            self.std_jet  = [self.std_jet[0],  1.0, 1.0, self.std_jet[3],  1.0, 1.0]
+        print("Mean part: {}".format(self.mean_part))
+        print("Std part: {}".format(self.std_part))
+        print("Mean jet: {}".format(self.mean_jet))
+        print("Std jet: {}".format(self.std_jet))
         self.num_pad = 0
         self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
         

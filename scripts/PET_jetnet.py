@@ -408,4 +408,3 @@ class PET_jetnet(keras.Model):
                         
             x = alpha_ * mean + sigma_ * eps
         return mean
-

@@ -7,7 +7,7 @@ import csv
 # rc('font', **{'family': 'serif'})
 # rc('text', usetex=True)
 # Load the loss
-loss_csv = '/global/homes/b/baihong/workdir/OmniLearn/scripts/logs_pipi_recon/loss.csv'
+loss_csv = '/global/homes/b/baihong/workdir/OmniLearn/scripts/logs_pipi_recon_boosted_total/temp.csv'
 train_loss = []
 val_loss = []
 with open(loss_csv, 'r', newline='') as f:

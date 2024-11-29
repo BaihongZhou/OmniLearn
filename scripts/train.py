@@ -58,6 +58,15 @@ def get_data_loader(flags):
     elif flags.dataset == 'pipi_recon':
         train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
         val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
+    elif flags.dataset == 'pipi_recon_boosted':
+        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),nevts=490000)
+        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),nevts=140000)
+    elif flags.dataset == 'pipi_recon_boosted_total':
+        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
+    elif flags.dataset == 'pipi_recon_Lorentz':
+        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_Lorentz_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_Lorentz_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
     elif flags.dataset == 'pirho':
         train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pirho_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
         val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pirho_test.hdf5'),flags.batch,hvd.rank(),hvd.size())    
@@ -154,14 +163,13 @@ def main():
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
         hvd.callbacks.MetricAverageCallback(),
         EarlyStopping(patience=30, restore_best_weights=True),
-        ReduceLROnPlateau(monitor='val_loss', patience=200, min_lr=1e-6)]
-    checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
-    print("Checkpoint name: ", checkpoint_name)
-    checkpoint_path = os.path.join(flags.folder, 'checkpoints', checkpoint_name)
-    checkpoint_callback = ModelCheckpoint(checkpoint_path,
-                                            save_best_only=True, mode='auto',
-                                            save_weights_only=True,
-                                            period=1)
+        ReduceLROnPlateau(monitor='val_loss', patience=30, min_lr=1e-6)]
+    # checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
+    # print("Checkpoint name: ", checkpoint_name)
+    # checkpoint_path = os.path.join(flags.folder, 'checkpoints', checkpoint_name)
+    # if os.path.exists(checkpoint_path):
+    #     print("Load the existing model")
+    #     model.load_weights(checkpoint_path)
     print(f"Rank: {hvd.rank()}, Local Rank: {hvd.local_rank()}, CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
     
     if hvd.rank() == 0:
@@ -172,8 +180,14 @@ def main():
                                               save_best_only=True, mode='auto',
                                               save_weights_only=True,
                                               period=1)
+        # period_chck = ModelCheckpoint(checkpoint_path.replace(".weights.h5", "_epoch_{epoch:02d}.weights.h5"),
+                        #   save_best_only=False, mode='auto',
+                        #   save_weights_only=True,
+                        #   period=20)
         callbacks.append(checkpoint_callback)
+        # callbacks.append(period_chck)
         callbacks.append(history)
+        
     hist = model.fit(train_loader.make_tfdata(),
                      epochs=flags.epoch,
                      validation_data=val_loader.make_tfdata(),

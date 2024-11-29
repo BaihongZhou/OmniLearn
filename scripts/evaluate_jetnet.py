@@ -72,7 +72,7 @@ def sample_data(test, model, flags, sample_name):
     if flags.ideal:
         j = test.preprocess_jet(test.jet)
     else:
-        file_name = os.path.join(flags.folder, 'JetNet', 'PET_jetnet150_8_local_layer_scale_token_baseline_generator.h5')
+        file_name = os.path.join(flags.folder, 'JetNet', 'PET_jetnet150_8_local_layer_scale_token_baseline_generator_0.h5')
         y = h5.File(file_name)['pid'][:]
 
     if flags.top:

@@ -353,10 +353,10 @@ class RecoTauDataLoaderWithNpzForçSample(DataLoader):
 
         self.load_data(path, batch_size,rank,size,nevts, data_type)
 
-        self.mean_part = [25.933, 0.0,  0.0, 70.558, 0.0]
-        self.std_part =  [17.052,  1.0,  1.0, 115.676,  1.0]
-        self.mean_jet = [-0.944, 1.725, 2.535, -1.114, 1.639, 2.337]
-        self.std_jet  = [13.988, 13.992, 38.754, 14.028, 13.824, 39.565]
+        self.mean_part = [25.932678, 0.0, 0.0, 70.54288, 0.0]
+        self.std_part =  [17.061451, 1.0, 1.0, 115.62893, 1.0]
+        self.mean_jet = [0.05766123, 0.014943519, 0.084477596, -0.01847846, -0.0021721262, -0.016755389]
+        self.std_jet  = [14.002326, 13.991539, 38.890766, 14.091634, 14.086069, 40.51254]
         self.num_pad = 0
         self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
         
@@ -388,23 +388,23 @@ class RecoTauDataLoaderWithNpzForçSample(DataLoader):
         # Load all the data from the npz files
         data = np.load(path)
         val_num = -1 if nevts is None else nevts
-        jet_1 = self.get_ptetaphiE(data['jet_1'][:val_num])
-        jet_2 = self.get_ptetaphiE(data['jet_2'][:val_num])
-        jet_3 = self.get_ptetaphiE(data['jet_3'][:val_num])
-        MET = data['MET'][:val_num]
-        Type = data['Type'][:val_num]
-        EventID = data['EventID'][:val_num]
-        tau_p_child1 = self.get_ptetaphiE(data['tau_p_child1'][:val_num])
-        tau_p_child2 = self.get_ptetaphiE(data['tau_p_child2'][:val_num])
-        tau_m_child1 = self.get_ptetaphiE(data['tau_m_child1'][:val_num])
-        tau_m_child2 = self.get_ptetaphiE(data['tau_m_child2'][:val_num])
-        nu_p = self.get_pxyz(data['nu_p'][:val_num])
-        nu_m = self.get_pxyz(data['nu_m'][:val_num])
+        jet_1 = self.get_ptetaphiE(data['jet_1'][rank:nevts:size])
+        jet_2 = self.get_ptetaphiE(data['jet_2'][rank:nevts:size])
+        jet_3 = self.get_ptetaphiE(data['jet_3'][rank:nevts:size])
+        MET = data['MET'][rank:nevts:size]
+        Type = data['Type'][rank:nevts:size]
+        EventID = data['EventID'][rank:nevts:size]
+        tau_p_child1 = self.get_ptetaphiE(data['tau_p_child1'][rank:nevts:size])
+        tau_p_child2 = self.get_ptetaphiE(data['tau_p_child2'][rank:nevts:size])
+        tau_m_child1 = self.get_ptetaphiE(data['tau_m_child1'][rank:nevts:size])
+        tau_m_child2 = self.get_ptetaphiE(data['tau_m_child2'][rank:nevts:size])
+        nu_p = self.get_pxyz(data['nu_p'][rank:nevts:size])
+        nu_m = self.get_pxyz(data['nu_m'][rank:nevts:size])
         self.EventID = EventID
         self.event_type = Type
         
         # For truth level study, self.X are all the truth tau children
-        self.X = np.concatenate([tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1]), tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1])], axis=1)
+        self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1])], axis=1)
         self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
         
         #add a one label to identify particles

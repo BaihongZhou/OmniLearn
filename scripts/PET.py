@@ -475,22 +475,13 @@ class PET(keras.Model):
                 x3 = layers.Dense(self.projection_dim)(x3)
                 if self.layer_scale:
                     x3 = LayerScale(self.layer_scale_init, self.projection_dim)(x3,mask)
-                cond_token = layers.Add()([x3,x2])
-                
-                if i == 1:
-                    obs = layers.GroupNormalization(groups=1)(cond_token+encoded)
-                    obs = layers.GlobalAveragePooling1D()(obs)
-                    obs = layers.Dense(self.num_jet)(obs)
-                    new_cond_label = layers.Dense(self.projection_dim,use_bias=False)(obs)
-                    new_cond_label = StochasticDepth(self.feature_drop)(new_cond_label)
-                    encoded = layers.Add()([encoded,new_cond_label])
-                        
+                cond_token = layers.Add()([x3,x2])            
 
             encoded = layers.GroupNormalization(groups=1)(cond_token+encoded)
             encoded = layers.GlobalAveragePooling1D()(encoded)
             encoded = layers.Dense(self.num_jet)(encoded)
         
-        return encoded,obs
+        return encoded
 
 
 def get_neighbors(points,features,projection_dim,K):

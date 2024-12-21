@@ -44,8 +44,6 @@ class PET_jetnet(keras.Model):
         self.num_diffusion = num_diffusion
         self.ema=0.999
         self.shape = (-1,1,1)
-        # The paramete to control the weight of the observation loss
-        self.lambda_obs = 1.0
 
         self.model_part  = PET(num_feat=num_feat,
                                num_jet=num_jet,
@@ -99,7 +97,6 @@ class PET_jetnet(keras.Model):
 
         #self.ema_part = keras.models.clone_model(self.model_part)
         self.loss_tracker = keras.metrics.Mean(name="loss")
-        self.obs_loss_tracker = keras.metrics.Mean(name="obs_loss")
 
         self.multistep_coefficients = [
             tf.constant([1], shape=(1, 1, 1, 1), dtype=tf.float32),
@@ -155,7 +152,7 @@ class PET_jetnet(keras.Model):
         so that `fit()` and `evaluate()` are able to `reset()` the loss tracker
         at the start of each epoch and at the start of an `evaluate()` call.
         """
-        return [self.loss_tracker, self.obs_loss_tracker]
+        return [self.loss_tracker]
 
 
     def compile(self,body_optimizer,head_optimizer):
@@ -182,17 +179,14 @@ class PET_jetnet(keras.Model):
             eps = tf.random.normal((batch_size,self.num_jet),dtype=tf.float32)
             perturbed_x = alpha*x['input_jet'] + eps * sigma
 
-            v_pred, obs = self.model_part([x['input_features'],
+            v_pred = self.model_part([x['input_features'],
                                       x['input_points'],
                                       x['input_mask'],
                                     perturbed_x,t,y])
             
-            
             v_jet = alpha * eps - sigma * x['input_jet']
             
-            obs_loss = self.lambda_obs * tf.reduce_mean(tf.square(obs - x['input_obs']))
-            
-            loss = tf.reduce_mean(tf.square(v_pred-v_jet)) + obs_loss
+            loss = tf.reduce_mean(tf.square(v_pred-v_jet))
 
 
         self.body_optimizer.minimize(loss,self.body.trainable_variables,tape=tape)                   
@@ -200,7 +194,6 @@ class PET_jetnet(keras.Model):
 
         
         self.loss_tracker.update_state(loss)
-        self.obs_loss_tracker.update_state(obs_loss)
                         
         for weight, ema_weight in zip(self.head.weights, self.ema_head.weights):
             ema_weight.assign(self.ema * ema_weight + (1 - self.ema) * weight)
@@ -223,18 +216,16 @@ class PET_jetnet(keras.Model):
         eps = tf.random.normal((batch_size,self.num_jet),dtype=tf.float32)
         perturbed_x = alpha*x['input_jet'] + eps * sigma
         
-        v_pred, obs = self.model_part([x['input_features'],
+        v_pred = self.model_part([x['input_features'],
                                   x['input_points'],
                                   x['input_mask'],
                                   perturbed_x,t,y])
             
             
         v_jet = alpha * eps - sigma * x['input_jet']
-        obs_loss = self.lambda_obs * tf.reduce_mean(tf.square(obs - x['input_obs']))
-        loss = tf.reduce_mean(tf.square(v_pred-v_jet)) + obs_loss
+        loss = tf.reduce_mean(tf.square(v_pred-v_jet))
             
         self.loss_tracker.update_state(loss)
-        self.obs_loss_tracker.update_state(obs_loss)
         return {m.name: m.result() for m in self.metrics}
             
     def call(self,x):        

@@ -74,7 +74,7 @@ def calculate_triangle_distance(feed_dict, weights, binning, alternative_name,re
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Run the OmniFold training and plotting routine.")
-    parser.add_argument("--folder", type=str, default="/pscratch/sd/v/vmikuni/PET", help="Folder containing input files")
+    parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/Unfold", help="Folder containing input files")
     parser.add_argument("--dataset", type=str, default="omnifold", help="Dataset to use")
     parser.add_argument("--mode", type=str, default="classifier", help="Loss type to train the model")
     parser.add_argument("--plot_folder", default="../plots", help="Folder to store plots")
@@ -98,10 +98,10 @@ def main():
     plot_utils.SetStyle()
     flags = parse_arguments()
 
-    mc = utils.OmniDataLoader(os.path.join(flags.folder,'OmniFold','train_pythia.h5'),flags.batch,
+    mc = utils.OmniDataLoader(os.path.join(flags.folder,'raw','train_pythia.h5'),flags.batch,
                               hvd.rank(),hvd.size())
 
-    data = utils.OmniDataLoader(os.path.join(flags.folder,'OmniFold','train_herwig.h5'),flags.batch,
+    data = utils.OmniDataLoader(os.path.join(flags.folder,'raw','train_herwig.h5'),flags.batch,
                                 hvd.rank(),hvd.size())
 
     if flags.reco:
@@ -121,8 +121,8 @@ def main():
     model_baseline = load_model(mc,flags, 'baseline')
     unfolded_weights_baseline = reweight_samples(mc_inputs,model_baseline,mfold,batch_size=flags.batch)
 
-    model_finetune = load_model(mc,flags, 'fine_tune')
-    unfolded_weights_finetune = reweight_samples(mc_inputs,model_finetune,mfold,batch_size=flags.batch)
+    # model_finetune = load_model(mc,flags, 'fine_tune')
+    # unfolded_weights_finetune = reweight_samples(mc_inputs,model_finetune,mfold,batch_size=flags.batch)
 
     mc_features = hvd.allgather(mc_features).numpy()
     data_features = hvd.allgather(tf.constant(data_features)).numpy()
@@ -134,13 +134,13 @@ def main():
         unfolded_name = 'pythia_reweighted' if flags.reco else 'pythia_unfolded'
         for feature in range(mc_features.shape[-1]):
             feed_dict = {
-                unfolded_name + '_fine_tune': mc_features[:, feature],
+                # unfolded_name + '_fine_tune': mc_features[:, feature],
                 unfolded_name + '_baseline': mc_features[:, feature],
                 'pythia': mc_features[:, feature],
                 'herwig': data_features[:, feature],
             }
             weights = {
-                unfolded_name + '_fine_tune': unfolded_weights_finetune,
+                # unfolded_name + '_fine_tune': unfolded_weights_finetune,
                 unfolded_name + '_baseline': unfolded_weights_baseline,
                 'pythia': np.ones(mc_features.shape[0]),
                 'herwig': np.ones(data_features.shape[0]),        
@@ -155,9 +155,9 @@ def main():
                                               )
             fig.savefig('{}/omnifold_iter_{}_feat_{}.pdf'.format(flags.plot_folder,flags.num_iter,feature))
             
-            d,derr = calculate_triangle_distance(feed_dict,weights,binning[feature],
-                                                 alternative_name=unfolded_name+'_fine_tune')
-            print("OmniLearn feat {}: {} +- {}".format(name[feature],d,derr))
+            # d,derr = calculate_triangle_distance(feed_dict,weights,binning[feature],
+            #                                      alternative_name=unfolded_name+'_fine_tune')
+            # print("OmniLearn feat {}: {} +- {}".format(name[feature],d,derr))
             
             d,derr = calculate_triangle_distance(feed_dict,weights,binning[feature],
                                                  alternative_name=unfolded_name+'_baseline')

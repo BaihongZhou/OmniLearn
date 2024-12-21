@@ -40,10 +40,12 @@ class PET_jetnet(keras.Model):
         self.max_part = num_part
         self.projection_dim = projection_dim
         self.layer_scale_init = layer_scale_init
-        self.num_steps = 10
+        self.num_steps = 200
         self.num_diffusion = num_diffusion
         self.ema=0.999
         self.shape = (-1,1,1)
+        # The paramete to control the weight of the observation loss
+        self.lambda_obs = 1.0
 
         self.model_part  = PET(num_feat=num_feat,
                                num_jet=num_jet,
@@ -97,6 +99,7 @@ class PET_jetnet(keras.Model):
 
         #self.ema_part = keras.models.clone_model(self.model_part)
         self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.obs_loss_tracker = keras.metrics.Mean(name="obs_loss")
 
         self.multistep_coefficients = [
             tf.constant([1], shape=(1, 1, 1, 1), dtype=tf.float32),
@@ -152,7 +155,7 @@ class PET_jetnet(keras.Model):
         so that `fit()` and `evaluate()` are able to `reset()` the loss tracker
         at the start of each epoch and at the start of an `evaluate()` call.
         """
-        return [self.loss_tracker]
+        return [self.loss_tracker, self.obs_loss_tracker]
 
 
     def compile(self,body_optimizer,head_optimizer):
@@ -179,14 +182,17 @@ class PET_jetnet(keras.Model):
             eps = tf.random.normal((batch_size,self.num_jet),dtype=tf.float32)
             perturbed_x = alpha*x['input_jet'] + eps * sigma
 
-            v_pred = self.model_part([x['input_features'],
+            v_pred, obs = self.model_part([x['input_features'],
                                       x['input_points'],
                                       x['input_mask'],
                                     perturbed_x,t,y])
             
             
             v_jet = alpha * eps - sigma * x['input_jet']
-            loss = tf.reduce_mean(tf.square(v_pred-v_jet))
+            
+            obs_loss = self.lambda_obs * tf.reduce_mean(tf.square(obs - x['input_obs']))
+            
+            loss = tf.reduce_mean(tf.square(v_pred-v_jet)) + obs_loss
 
 
         self.body_optimizer.minimize(loss,self.body.trainable_variables,tape=tape)                   
@@ -194,6 +200,7 @@ class PET_jetnet(keras.Model):
 
         
         self.loss_tracker.update_state(loss)
+        self.obs_loss_tracker.update_state(obs_loss)
                         
         for weight, ema_weight in zip(self.head.weights, self.ema_head.weights):
             ema_weight.assign(self.ema * ema_weight + (1 - self.ema) * weight)
@@ -216,16 +223,18 @@ class PET_jetnet(keras.Model):
         eps = tf.random.normal((batch_size,self.num_jet),dtype=tf.float32)
         perturbed_x = alpha*x['input_jet'] + eps * sigma
         
-        v_pred = self.model_part([x['input_features'],
+        v_pred, obs = self.model_part([x['input_features'],
                                   x['input_points'],
                                   x['input_mask'],
                                   perturbed_x,t,y])
             
             
         v_jet = alpha * eps - sigma * x['input_jet']
-        loss = tf.reduce_mean(tf.square(v_pred-v_jet))
+        obs_loss = self.lambda_obs * tf.reduce_mean(tf.square(obs - x['input_obs']))
+        loss = tf.reduce_mean(tf.square(v_pred-v_jet)) + obs_loss
             
-        self.loss_tracker.update_state(loss)            
+        self.loss_tracker.update_state(loss)
+        self.obs_loss_tracker.update_state(obs_loss)
         return {m.name: m.result() for m in self.metrics}
             
     def call(self,x):        
@@ -256,17 +265,23 @@ class PET_jetnet(keras.Model):
             cond = cond_split[i]
             
             jet_candidate = []
-            for _ in range(100):
-                jet = self.DDPMSampler(part,point,mask,cond,
-                                       [self.ema_body,self.ema_head],
-                                       data_shape=[part.shape[0],self.num_jet],
-                                       w = 0.0,
-                                       num_steps = self.num_steps,
-                                       const_shape = [-1,1]).numpy()
+            for _ in range(10):
+                # jet = self.DDPMSampler(part,point,mask,cond,
+                #                        [self.ema_body,self.ema_head],
+                #                        data_shape=[part.shape[0],self.num_jet],
+                #                        w = 0.0,
+                #                        num_steps = self.num_steps,
+                #                        const_shape = [-1,1]).numpy()
+                jet = self.DDIMSampler(part,point,mask,cond,
+                                        [self.ema_body,self.ema_head],
+                                        data_shape=[part.shape[0],self.num_jet],
+                                        w = 0.0,
+                                        num_steps = self.num_steps,
+                                        const_shape = [-1,1]).numpy()
                 jet_candidate.append(jet)
             
             total_jets = np.concatenate(jet_candidate,1)
-            total_jets = np.array(total_jets).reshape(-1, 100, jet.shape[1])
+            total_jets = np.array(total_jets).reshape(-1, 10, jet.shape[1])
             jet_total.append(total_jets)
         return np.concatenate(jet_total)
 
@@ -318,19 +333,7 @@ class PET_jetnet(keras.Model):
         m_tau_0 = (e_lep_0 + e_nu_0)**2 - np.sum(tau_0**2,-1,keepdims=True)
         m_tau_1 = (e_lep_1 + e_nu_1)**2 - np.sum(tau_1**2,-1,keepdims=True)
         idx = np.argmin(np.abs(m_tau_0 - 1.777) + np.abs(m_tau_1 - 1.777), 1, keepdims=True)
-        
-        # Use DeltaR selection
-        # lepton_0 = evert_prep(part[:,0],mean_lep[:5],std_lep[:5])
-        # lepton_1 = revert_prep(part[:,1],mean_lep[5:],std_lep[5:])
-        
-        # new_nu = revert_prep(nu,mean_nu,std_nu)
-        # nu_0 = new_nu[:,:3]
-        # nu_0 = get_ptetaphi(nu_0)
-        # nu_1 = new_nu[:,3:]
-        # nu_1 = get_ptetaphi(nu_1)
-        # dR_0 = np.sqrt((nu_0[:,1]-lepton_0[:,1])**2 + (nu_0[:,2]-lepton_0[:,2])**2)
-        # dR_1 = np.sqrt((nu_1[:,1]-lepton_1[:,1])**2 + (nu_1[:,2]-lepton_1[:,2])**2)
-        # idx = np.argmin(dR_0 + dR_1, 1, keepdims=True)
+    
         return np.take_along_axis(nu, idx, axis=1)
 
 
@@ -395,16 +398,66 @@ class PET_jetnet(keras.Model):
             model_body, model_head = model
 
             v = model_body([part,point,mask,t], training=False)
-            v = model_head([v,x,mask,t,cond],training=False)
+            v,_ = model_head([v,x,mask,t,cond],training=False)
             
             eps = v * alpha + x * sigma
             u = alpha_s/alpha* x - sigma_s*tf.math.expm1(0.25*(logsnr_ - logsnr))*eps
 
             v = model_body([part,point,mask,s], training=False)
-            v = model_head([v,u,mask,s,cond],training=False)
+            v,_ = model_head([v,u,mask,s,cond],training=False)
 
             eps = v * alpha_s + u * sigma_s            
             mean = alpha_s * u - sigma_s * v
                         
             x = alpha_ * mean + sigma_ * eps
         return mean
+    
+    @tf.function
+    def DDIMSampler(self,
+                    part, point, mask, cond,
+                    model,
+                    data_shape=None,
+                    const_shape=None,
+                    w=0.1,
+                    num_steps=100,
+                    eta=1.0):  
+
+        """
+        Generate samples from score-based models with DDIM method.
+
+        Args:
+        cond: Conditional input
+        model: Trained score model to use
+        data_shape: Format of the data
+        const_shape: Format for constants, should match the data_shape in dimensions
+        part, point, mask: Additional input components
+        w: Weight parameter for condition (optional)
+        num_steps: Number of sampling steps
+        eta: Noise scaling factor (0 for deterministic sampling, >0 for stochastic sampling)
+
+        Returns:
+        Samples.
+        """
+
+        batch_size = cond.shape[0]
+        x = self.prior_sde(data_shape)
+
+        for time_step in tf.range(num_steps, 0, delta=-1):
+            t = tf.ones((batch_size, 1), dtype=tf.int32) * time_step / num_steps
+            logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t, shape=const_shape)
+            logsnr_, alpha_, sigma_ = self.get_logsnr_alpha_sigma(
+                tf.ones((batch_size, 1), dtype=tf.int32) * (time_step - 1) / num_steps,
+                shape=const_shape
+            )
+
+            # Compute the predicted epsilon using the model
+            model_body, model_head = model
+            v = model_body([part, point, mask, t], training=False)
+            v,_ = model_head([v, x, mask, t, cond], training=False)
+            eps = v * alpha + x * sigma
+
+            # Update x using DDIM deterministic update rule
+            pred_x0 = (x - sigma * eps) / alpha  # Predicted x_0
+            x = alpha_ * pred_x0 + sigma_ * (eta * eps)  # Add noise if eta > 0
+
+        return x  # Return the final sample

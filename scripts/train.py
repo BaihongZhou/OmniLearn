@@ -10,6 +10,7 @@ import pickle
 # Custom local imports
 import utils
 from PET_jetnet import PET_jetnet
+from PET_regression import PET as PET_regression
 
 # Keras imports
 from tensorflow.keras.optimizers import schedules, Lion
@@ -27,25 +28,25 @@ def parse_arguments():
     parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/", help="Folder containing input files")
     parser.add_argument("--mode", type=str, default="generator", help="Loss type to train the model")
     parser.add_argument("--batch", type=int, default=128, help="Batch size")
-    parser.add_argument("--epoch", type=int, default=500, help="Max epoch")
-    parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
-    parser.add_argument("--lr_factor", type=float, default=1.0, help="Factor to adjust learning rate")
+    parser.add_argument("--epoch", type=int, default=300, help="Max epoch")
+    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
+    parser.add_argument("--lr_factor", type=float, default=2, help="Factor to adjust learning rate")
     parser.add_argument("--fine_tune", action='store_true', default=False, help='Fine tune a model')
     parser.add_argument("--local", action='store_true', default=True, help='Use local embedding')
-    parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
+    parser.add_argument("--num_layers", type=int, default=4, help="Number of transformer layers")
     parser.add_argument("--drop_probability", type=float, default=0.0, help="Drop probability")
     parser.add_argument("--simple", action='store_true', default=False, help='Use simplified head model')
     parser.add_argument("--talking_head", action='store_true', default=False, help='Use talking head attention')
-    parser.add_argument("--layer_scale", action='store_true', default=True, help='Use layer scale in the residual connections')
+    parser.add_argument("--layer_scale", action='store_true', default=False, help='Use layer scale in the residual connections')
     return parser.parse_args()
 
 def get_data_loader(flags):
     if flags.dataset == 'jetnet150':
         train = utils.JetNetDataLoader(os.path.join(flags.folder,'JetNet','train_150.h5'), flags.batch, hvd.rank(), hvd.size(), big=True)
         val = utils.JetNetDataLoader(os.path.join(flags.folder,'JetNet','test_150.h5'), flags.batch, hvd.rank(), hvd.size(), big=True)
-    elif flags.dataset == 'jetnet30':
-        train = utils.JetNetDataLoader(os.path.join(flags.folder,'JetNet','train_30.h5'), flags.batch, hvd.rank(), hvd.size())
-        val = utils.JetNetDataLoader(os.path.join(flags.folder,'JetNet','test_30.h5'), flags.batch, hvd.rank(), hvd.size())
+    elif flags.dataset == 'pipi_with_obs':
+        train = utils.TruthTauWithObsDataLoader(os.path.join(flags.folder,'NumpyData/','processed/pipi_obs_train.hdf5'), flags.batch, hvd.rank(), hvd.size())
+        val = utils.TruthTauWithObsDataLoader(os.path.join(flags.folder,'NumpyData/','processed/pipi_obs_test.hdf5'), flags.batch, hvd.rank(), hvd.size())
     elif flags.dataset == 'top':
         train = utils.TopDataLoaderWithGenerator(os.path.join(flags.folder,'newh5/', 'train.hdf5'),flags.batch,hvd.rank(),hvd.size())
         val = utils.TopDataLoaderWithGenerator(os.path.join(flags.folder,'newh5/', 'test.hdf5'),flags.batch,hvd.rank(),hvd.size())
@@ -58,18 +59,27 @@ def get_data_loader(flags):
     elif flags.dataset == 'pipi_recon':
         train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
         val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
+    elif flags.dataset == "pipi_recon_complete":
+        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_complete_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_complete_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
+    elif flags.dataset == 'pipi_recon_pion':
+        train = utils.ReconNuPionDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_pion_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.ReconNuPionDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_pion_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
+    elif flags.dataset == 'pipi_tau_recon':
+        train = utils.ReconTauPredict(os.path.join(flags.folder,'NumpyData/', 'processed/pi_pi_tau_recon_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.ReconTauPredict(os.path.join(flags.folder,'NumpyData/', 'processed/pi_pi_tau_recon_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
     elif flags.dataset == 'pipi_recon_boosted':
         train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),nevts=490000)
         val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),nevts=140000)
     elif flags.dataset == 'pipi_recon_boosted_total':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_boosted_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_pion_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_pion_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
     elif flags.dataset == 'pipi_recon_Lorentz':
         train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_Lorentz_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
         val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_recon_Lorentz_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
-    elif flags.dataset == 'pirho':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pirho_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/pirho_test.hdf5'),flags.batch,hvd.rank(),hvd.size())    
+    elif flags.dataset == 'pipi_regression':
+        train = utils.RecoTauRegression(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_regression_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
+        val = utils.RecoTauRegression(os.path.join(flags.folder,'NumpyData/', 'processed/pipi_regression_test.hdf5'),flags.batch,hvd.rank(),hvd.size())    
     elif flags.dataset == 'rhorho':
         train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/rhorho_train.hdf5'),flags.batch,hvd.rank(),hvd.size())
         val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'processed/rhorho_test.hdf5'),flags.batch,hvd.rank(),hvd.size())
@@ -121,12 +131,19 @@ class LossHistory(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         print_loss = logs.get('loss')
+        # obs_loss = logs.get('obs_loss')
         val_loss = logs.get('val_loss')
+        # val_obs_loss = logs.get('val_obs_loss')
         print_loss = str(print_loss)
         val_loss = str(val_loss)
+        # obs_loss = str(obs_loss)
+        # val_obs_loss = str(val_obs_loss)
         with open("./logs_{}/loss.csv".format(self.dataset_name), 'a+') as f:
             f.write(print_loss + ',' + val_loss)
             f.write('\n')
+        # with open("./logs_{}/obs.csv".format(self.dataset_name), 'a+') as f1:
+        #    f1.write(obs_loss + ',' + val_obs_loss)
+        #    f1.write('\n')
 
 def main():
     utils.setup_gpus()
@@ -140,20 +157,31 @@ def main():
     else:
         model_name = None
 
-    
-    model = PET_jetnet(num_feat=train_loader.num_feat,
-                       num_jet=train_loader.num_jet,
-                       num_classes=train_loader.num_classes,
-                       num_part=train_loader.num_part,
-                       local=flags.local,
-                       num_layers=flags.num_layers,
-                       drop_probability=flags.drop_probability,
-                       simple=flags.simple, layer_scale=flags.layer_scale,
-                       talking_head=flags.talking_head,
-                       mode=flags.mode,
-                       model_name = model_name,
-                       fine_tune=flags.fine_tune
-                       )
+    if flags.dataset == 'pipi_regression':
+        model = PET_regression(num_feat=train_loader.num_feat,
+                        num_jet=train_loader.num_jet,
+                        num_classes=train_loader.num_classes,
+                        local=flags.local,
+                        num_layers=flags.num_layers,
+                        drop_probability=flags.drop_probability,
+                        simple=flags.simple, layer_scale=flags.layer_scale,
+                        talking_head=flags.talking_head,
+                        mode=flags.mode
+                        )
+    else:
+        model = PET_jetnet(num_feat=train_loader.num_feat,
+                        num_jet=train_loader.num_jet,
+                        num_classes=train_loader.num_classes,
+                        num_part=train_loader.num_part,
+                        local=flags.local,
+                        num_layers=flags.num_layers,
+                        drop_probability=flags.drop_probability,
+                        simple=flags.simple, layer_scale=flags.layer_scale,
+                        talking_head=flags.talking_head,
+                        mode=flags.mode,
+                        model_name = model_name,
+                        fine_tune=flags.fine_tune
+                        )
 
     optimizer_body = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
     optimizer_head = configure_optimizers(flags, train_loader)
@@ -162,14 +190,9 @@ def main():
     callbacks = [
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
         hvd.callbacks.MetricAverageCallback(),
-        EarlyStopping(patience=30, restore_best_weights=True),
-        ReduceLROnPlateau(monitor='val_loss', patience=30, min_lr=1e-6)]
-    # checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
-    # print("Checkpoint name: ", checkpoint_name)
-    # checkpoint_path = os.path.join(flags.folder, 'checkpoints', checkpoint_name)
-    # if os.path.exists(checkpoint_path):
-    #     print("Load the existing model")
-    #     model.load_weights(checkpoint_path)
+        EarlyStopping(patience=20, restore_best_weights=True),
+        ReduceLROnPlateau(monitor='val_loss', patience=20, min_lr=1e-6)]
+
     print(f"Rank: {hvd.rank()}, Local Rank: {hvd.local_rank()}, CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
     
     if hvd.rank() == 0:

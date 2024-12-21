@@ -106,7 +106,7 @@ def preprocess(p,jets,folder,nparts=100):
 if __name__=='__main__':
     parser = OptionParser(usage="%prog [opt]  inputFiles")
     parser.add_option("--npoints", type=int, default=101, help="Number of particles per event")
-    parser.add_option("--folder", type="string", default='/pscratch/sd/v/vmikuni/PET/OmniFold', help="Folder containing input files")
+    parser.add_option("--folder", type="string", default='/pscratch/sd/b/baihong/data/Unfold/raw', help="Folder containing input files")
     parser.add_option("--sample", type="string", default='pythia', help="sample to use")
 
     (flags, args) = parser.parse_args()

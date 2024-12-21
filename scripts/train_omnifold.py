@@ -12,11 +12,11 @@ import utils
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="OmniFold training script with distributed computing.")
-    parser.add_argument("--folder", type=str, default="/pscratch/sd/v/vmikuni/PET", help="Folder containing input files")
+    parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/Unfold", help="Folder containing input files")
     parser.add_argument("--dataset", type=str, default="omnifold", help="Dataset to use")
     parser.add_argument("--mode", type=str, default="classifier", help="Loss type to train the model: available options are [all/classifier/generator]")
     parser.add_argument("--batch", type=int, default=512, help="Batch size")
-    parser.add_argument("--epoch", type=int, default=20, help="Maximum number of epochs")
+    parser.add_argument("--epoch", type=int, default=100, help="Maximum number of epochs")
     parser.add_argument("--num_iter", type=int, default=6, help="OmniFold iterations")
     parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
     parser.add_argument("--fine_tune", action='store_true', default=False, help='Fine tune a model')
@@ -37,8 +37,8 @@ def main():
     utils.setup_gpus()
     flags = parse_arguments()
 
-    mc = utils.OmniDataLoader(os.path.join(flags.folder, 'OmniFold', 'train_pythia.h5'),flags.batch, hvd.rank(), hvd.size())
-    data = utils.OmniDataLoader(os.path.join(flags.folder, 'OmniFold', 'train_herwig.h5'),flags.batch, hvd.rank(), hvd.size())
+    mc = utils.OmniDataLoader(os.path.join(flags.folder, 'raw', 'train_pythia.h5'),flags.batch, hvd.rank(), hvd.size())
+    data = utils.OmniDataLoader(os.path.join(flags.folder, 'raw', 'train_herwig.h5'),flags.batch, hvd.rank(), hvd.size())
 
     model_name = None
     if flags.fine_tune:

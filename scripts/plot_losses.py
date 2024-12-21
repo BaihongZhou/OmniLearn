@@ -2,17 +2,18 @@ import numpy as np
 import utils
 import plot_utils
 import argparse
+import pickle
 
 plot_utils.SetStyle()
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process and plot data based on the given dataset and configuration.")
     parser.add_argument("--dataset", type=str, default="top", help="Folder containing input files")
-    parser.add_argument("--folder", type=str, default="/pscratch/sd/v/vmikuni/PET/", help="Folder containing input files")
+    parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/", help="Folder containing input files")
     parser.add_argument("--plot_folder", type=str, default="../plots", help="Folder to save the outputs")
     parser.add_argument("--mode", type=str, default="all", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--local", action='store_true', help="Use local embedding")
-    parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
+    parser.add_argument("--num_layers", type=int, default=4, help="Number of transformer layers")
     parser.add_argument("--simple", action='store_true', help="Use simplified head model")
     parser.add_argument("--layer_scale", action='store_true', help="Use layer scale in the residual connections")
     return parser.parse_args()
@@ -52,18 +53,19 @@ def load_and_plot_history(flags):
         baseline_file = f'{flags.folder}/histories/OmniFold_baseline_iter0_step1.pkl'
         ft_file = f'{flags.folder}/histories/OmniFold_fine_tune_iter0_step1.pkl'
             
-    history_baseline = utils.load_pickle(flags.folder, baseline_file)
-    history_ft = utils.load_pickle(flags.folder, ft_file)
-
+    # history_baseline = utils.load_pickle(flags.folder, baseline_file)
+    # history_ft = utils.load_pickle(flags.folder, ft_file)
+    with open(f'{flags.folder}/histories/PET_pipi_with_obs_4_local_layer_scale_token_baseline_generator.pkl', 'rb') as file_pi:
+        history_baseline = pickle.load(file_pi)
     if flags.mode == 'generator':        
         loss_key = 'val_part'
         nchunk = 10        
     else:
-        loss_key = 'val_loss'
+        loss_key = 'obs_loss'
         nchunk = 1
         
     plot_data = {
-        f'{flags.dataset}_fine_tune': compute_means(history_ft[loss_key][:],nchunk),
+        f'{flags.dataset}_fine_tune': compute_means(history_baseline['val_obs_loss'][:],nchunk),
         flags.dataset: compute_means(history_baseline[loss_key][:],nchunk),
     }
     fig, ax = plot_utils.PlotRoutine(plot_data, xlabel='Epochs' if loss_key == 'val_loss' else 'Epochs x 10', ylabel='Validation Loss', plot_min=True)

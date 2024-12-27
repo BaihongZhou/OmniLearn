@@ -666,7 +666,7 @@ class RecoTauDataLoaderWithPKLForSample(DataLoader):
         #let's normalize the met pT
         # Check for NaN values after log transformation
         self.orin_y = self.y.copy()
-        self.y[:,0] = np.ma.log(self.y[:,0]).filled(1e-6)
+        self.y[:,0] = np.log(self.y[:,0])
         self.mask = self.X[:,:,2]!=0
 
         # self.batch_size = batch_size

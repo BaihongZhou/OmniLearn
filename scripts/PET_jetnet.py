@@ -389,13 +389,13 @@ class PET_jetnet(keras.Model):
             model_body, model_head = model
 
             v = model_body([part,point,mask,t], training=False)
-            v,_ = model_head([v,x,mask,t,cond],training=False)
+            v = model_head([v,x,mask,t,cond],training=False)
             
             eps = v * alpha + x * sigma
             u = alpha_s/alpha* x - sigma_s*tf.math.expm1(0.25*(logsnr_ - logsnr))*eps
 
             v = model_body([part,point,mask,s], training=False)
-            v,_ = model_head([v,u,mask,s,cond],training=False)
+            v = model_head([v,u,mask,s,cond],training=False)
 
             eps = v * alpha_s + u * sigma_s            
             mean = alpha_s * u - sigma_s * v
@@ -444,7 +444,7 @@ class PET_jetnet(keras.Model):
             # Compute the predicted epsilon using the model
             model_body, model_head = model
             v = model_body([part, point, mask, t], training=False)
-            v,_ = model_head([v, x, mask, t, cond], training=False)
+            v = model_head([v, x, mask, t, cond], training=False)
             eps = v * alpha + x * sigma
 
             # Update x using DDIM deterministic update rule

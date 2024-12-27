@@ -18,7 +18,7 @@ class PET(keras.Model):
                  local = True, K = 2,
                  num_local = 2, 
                  num_layers = 8, num_class_layers=2,
-                 num_gen_layers = 4,
+                 num_gen_layers = 2,
                  num_heads = 4,drop_probability = 0.0,
                  simple = False, layer_scale = True,
                  layer_scale_init = 1e-5,        

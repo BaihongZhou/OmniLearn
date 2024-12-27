@@ -28,12 +28,12 @@ def parse_arguments():
     parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/", help="Folder containing input files")
     parser.add_argument("--mode", type=str, default="generator", help="Loss type to train the model")
     parser.add_argument("--batch", type=int, default=128, help="Batch size")
-    parser.add_argument("--epoch", type=int, default=300, help="Max epoch")
-    parser.add_argument("--lr", type=float, default=3e-4, help="Learning rate")
-    parser.add_argument("--lr_factor", type=float, default=2, help="Factor to adjust learning rate")
+    parser.add_argument("--epoch", type=int, default=500, help="Max epoch")
+    parser.add_argument("--lr", type=float, default=3e-5, help="Learning rate")
+    parser.add_argument("--lr_factor", type=float, default=1.0, help="Factor to adjust learning rate")
     parser.add_argument("--fine_tune", action='store_true', default=False, help='Fine tune a model')
     parser.add_argument("--local", action='store_true', default=True, help='Use local embedding')
-    parser.add_argument("--num_layers", type=int, default=4, help="Number of transformer layers")
+    parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
     parser.add_argument("--drop_probability", type=float, default=0.0, help="Drop probability")
     parser.add_argument("--simple", action='store_true', default=False, help='Use simplified head model')
     parser.add_argument("--talking_head", action='store_true', default=False, help='Use talking head attention')
@@ -131,19 +131,12 @@ class LossHistory(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         print_loss = logs.get('loss')
-        # obs_loss = logs.get('obs_loss')
         val_loss = logs.get('val_loss')
-        # val_obs_loss = logs.get('val_obs_loss')
         print_loss = str(print_loss)
         val_loss = str(val_loss)
-        # obs_loss = str(obs_loss)
-        # val_obs_loss = str(val_obs_loss)
         with open("./logs_{}/loss.csv".format(self.dataset_name), 'a+') as f:
             f.write(print_loss + ',' + val_loss)
             f.write('\n')
-        # with open("./logs_{}/obs.csv".format(self.dataset_name), 'a+') as f1:
-        #    f1.write(obs_loss + ',' + val_obs_loss)
-        #    f1.write('\n')
 
 def main():
     utils.setup_gpus()
@@ -190,8 +183,8 @@ def main():
     callbacks = [
         hvd.callbacks.BroadcastGlobalVariablesCallback(0),
         hvd.callbacks.MetricAverageCallback(),
-        EarlyStopping(patience=20, restore_best_weights=True),
-        ReduceLROnPlateau(monitor='val_loss', patience=20, min_lr=1e-6)]
+        EarlyStopping(patience=30, restore_best_weights=True),
+        ReduceLROnPlateau(monitor='val_loss', patience=30, min_lr=1e-6)]
 
     print(f"Rank: {hvd.rank()}, Local Rank: {hvd.local_rank()}, CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
     

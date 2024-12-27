@@ -176,7 +176,7 @@ def nomi_check():
     hist_plot(truth_core, recon_core, "nominal")
         
 def main():
-    syst_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_12.14/results/pi_pi/systematics"
+    syst_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics"
     finished_eval_list = glob.glob(f"{syst_path}/*/pi_pi_particles_eval.npz")
     check_list = []
     check_list_name = []

@@ -79,7 +79,7 @@ def load_data_and_model(flags):
     
     # model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_Lorentz_8_local_layer_scale_token_baseline_generator.weights.h5"
     # model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_6_local_layer_scale_token_baseline_generator.weights.h5"
-    model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_with_obs_4_local_layer_scale_token_baseline_generator.weights.h5"
+    model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_8_local_layer_scale_token_baseline_generator.weights.h5"
     model.load_weights(model_name)
     return truth_path_list, test_loader_list, model
 

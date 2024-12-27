@@ -37,7 +37,7 @@ name_map = {
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
-    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_12.14/results/pi_pi/systematics", help="Folder containing input files")
+    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
     parser.add_argument("--local", action='store_true', help="Use local embedding")

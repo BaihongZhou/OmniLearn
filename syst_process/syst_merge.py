@@ -21,7 +21,7 @@ name_map = {
     "Zll": 9
 }
     
-raw_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_12.14/results/pi_pi/systematics"
+raw_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics"
 raw_file_list = glob.glob(f"{raw_path}/variation.*")
 for i in range(len(raw_file_list)):
     merge_file_path = raw_file_list[i]

@@ -24,10 +24,26 @@ name_map = {
     "pi_pi_MP": 12,
     "pi_pi_PP": 13,
     "pi_rho": 1,
+    "pi_rho_MM": 14,
+    "pi_rho_PM": 15,
+    "pi_rho_MP": 16,
+    "pi_rho_PP": 17,
     "lep_pi": 2,
+    "lep_pi_MM": 18,
+    "lep_pi_PM": 19,
+    "lep_pi_MP": 20,
+    "lep_pi_PP": 21,
     "lep_rho": 3,
+    "lep_rho_MM": 22,
+    "lep_rho_PM": 23,
+    "lep_rho_MP": 24,
+    "lep_rho_PP": 25,
     "QCD": 4,
     "rho_rho": 5,
+    "rho_rho_MM": 26,
+    "rho_rho_PM": 27,
+    "rho_rho_MP": 28,
+    "rho_rho_PP": 29,
     "tt": 6,
     "Wlnu": 7,
     "Wtaunu": 8,
@@ -37,8 +53,10 @@ name_map = {
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
-    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics", help="Folder containing input files")
+    # parser.add_argument("--folder", default=" /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250125_new_fake/results/pi_pi/systematics", help="Folder containing input files")
+    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
+    parser.add_argument("--train_channel", type=str, default="pi_pi", help="Batch size")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
     parser.add_argument("--local", action='store_true', help="Use local embedding")
     parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
@@ -50,29 +68,14 @@ def parse_arguments():
     parser.add_argument("--plot_folder", default="../plots", help="Folder to save the outputs")
     return parser.parse_args()
 
-def get_data_info(flags):
-    if flags.dataset == 'jetnet150':
-        test = utils.jetnetDataLoader(os.path.join(flags.folder,'jetnet','test_150.h5'),rank = hvd.rank(),size = hvd.size(),big=True)
-        return test
-        
-    elif flags.dataset == 'tautotalwithNpz':
-        truth_path = flags.folder
-        truth_path_list = glob.glob(truth_path + '**/**/*.npz')
-        test_loader_list = []
-        for truth_path in truth_path_list:
-            test_loader_list.append(utils.RecoTauDataLoaderWithNpzForSample(truth_path,hvd.rank(),hvd.size(),nevts=10000,data_type='val'))
-        
-        return test_path_list, test_loader_list
-
 
 def load_data_and_model(flags):
     
     truth_path = flags.folder
-    # truth_path_list = glob.glob(truth_path + '/variation.*/merged.pkl')
-    truth_path_list = [path for path in glob.glob(truth_path + '/variation.*/merged.pkl') if int(path.split('/')[-2].split('.')[-1]) % 2 == 0]
+    truth_path_list = [path for path in glob.glob(truth_path + flags.train_channel + '/systematics/variation.*/merged.pkl') if (path.split('/')[-2].split('.')[-1] == 'plus' and path.split('/')[-2].split('.')[-2] != 'soft_met')]
     test_loader_list = []
     for truth_path in truth_path_list:
-        test_loader_list.append(utils.RecoTauDataLoaderWithPKLForSample(truth_path,rank=hvd.rank(),size=hvd.size(),data_type='val'))
+        test_loader_list.append(utils.RecoTauDataLoaderWithPKLForSample(truth_path,rank=hvd.rank(),size=hvd.size(),samples_name=flags.train_channel))
     test = test_loader_list[0]
     model = PET_jetnet(num_feat=test.num_feat,
                        num_jet=test.num_jet,
@@ -84,8 +87,20 @@ def load_data_and_model(flags):
                        simple=flags.simple, layer_scale=flags.layer_scale,
                        talking_head=flags.talking_head,
                        mode=flags.mode, fine_tune=False, model_name=None, use_mean=flags.fine_tune)
-    
-    model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_8_local_layer_scale_token_baseline_generator.weights.h5"
+    if flags.train_channel == "pi_pi":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_8_local_layer_scale_token_baseline_generator.weights.h5"
+    elif flags.train_channel == "pi_rho":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pirho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    elif flags.train_channel == "e_pi":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_epi_8_local_layer_scale_token_baseline_generator.weights.h5"
+    elif flags.train_channel == "e_rho":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_erho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    elif flags.train_channel == "mu_pi":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_mupi_8_local_layer_scale_token_baseline_generator.weights.h5"
+    elif flags.train_channel == "mu_rho":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_murho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    elif flags.train_channel == "rho_rho":
+        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_rhorho_8_local_layer_scale_token_baseline_generator.weights.h5"
     model.load_weights(model_name)
     return truth_path_list, test_loader_list, model
 
@@ -105,6 +120,22 @@ def data_split(total_jet, EventID, event_type):
     pipi_PM_jet = total_jet[event_type == 11]
     pipi_MP_jet = total_jet[event_type == 12]
     pipi_PP_jet = total_jet[event_type == 13]
+    pirho_MM_jet = total_jet[event_type == 14]
+    pirho_PM_jet = total_jet[event_type == 15]
+    pirho_MP_jet = total_jet[event_type == 16]
+    pirho_PP_jet = total_jet[event_type == 17]
+    leppi_MM_jet = total_jet[event_type == 18]
+    leppi_PM_jet = total_jet[event_type == 19]
+    leppi_MP_jet = total_jet[event_type == 20]
+    leppi_PP_jet = total_jet[event_type == 21]
+    leprho_MM_jet = total_jet[event_type == 22]
+    leprho_PM_jet = total_jet[event_type == 23]
+    leprho_MP_jet = total_jet[event_type == 24]
+    leprho_PP_jet = total_jet[event_type == 25]
+    rhorho_MM_jet = total_jet[event_type == 26]
+    rhorho_PM_jet = total_jet[event_type == 27]
+    rhorho_MP_jet = total_jet[event_type == 28]
+    rhorho_PP_jet = total_jet[event_type == 29]
     
     pipi_ID = EventID[event_type == 0]
     pirho_ID = EventID[event_type == 1]
@@ -120,8 +151,24 @@ def data_split(total_jet, EventID, event_type):
     pipi_PM_ID = EventID[event_type == 11]
     pipi_MP_ID = EventID[event_type == 12]
     pipi_PP_ID = EventID[event_type == 13]
+    pirho_MM_ID = EventID[event_type == 14]
+    pirho_PM_ID = EventID[event_type == 15]
+    pirho_MP_ID = EventID[event_type == 16]
+    pirho_PP_ID = EventID[event_type == 17]
+    leppi_MM_ID = EventID[event_type == 18]
+    leppi_PM_ID = EventID[event_type == 19]
+    leppi_MP_ID = EventID[event_type == 20]
+    leppi_PP_ID = EventID[event_type == 21]
+    leprho_MM_ID = EventID[event_type == 22]
+    leprho_PM_ID = EventID[event_type == 23]
+    leprho_MP_ID = EventID[event_type == 24]
+    leprho_PP_ID = EventID[event_type == 25]
+    rhorho_MM_ID = EventID[event_type == 26]
+    rhorho_PM_ID = EventID[event_type == 27]
+    rhorho_MP_ID = EventID[event_type == 28]
+    rhorho_PP_ID = EventID[event_type == 29]
     
-    return pipi_jet, pirho_jet, leppi_jet, leprho_jet, qcd_jet, rhorho_jet, tt_jet, wlnu_jet, wtaunu_jet, zll_jet, pipi_MM_jet, pipi_PM_jet, pipi_MP_jet, pipi_PP_jet, pipi_ID, pirho_ID, leppi_ID, leprho_ID, qcd_ID, rhorho_ID, tt_ID, wlnu_ID, wtaunu_ID, zll_ID, pipi_MM_ID, pipi_PM_ID, pipi_MP_ID, pipi_PP_ID
+    return pipi_jet, pirho_jet, leppi_jet, leprho_jet, qcd_jet, rhorho_jet, tt_jet, wlnu_jet, wtaunu_jet, zll_jet, pipi_MM_jet, pipi_PM_jet, pipi_MP_jet, pipi_PP_jet, pipi_ID, pirho_ID, leppi_ID, leprho_ID, qcd_ID, rhorho_ID, tt_ID, wlnu_ID, wtaunu_ID, zll_ID, pipi_MM_ID, pipi_PM_ID, pipi_MP_ID, pipi_PP_ID, pirho_MM_jet, pirho_PM_jet, pirho_MP_jet, pirho_PP_jet, pirho_MM_ID, pirho_PM_ID, pirho_MP_ID, pirho_PP_ID, leppi_MM_jet, leppi_PM_jet, leppi_MP_jet, leppi_PP_jet, leppi_MM_ID, leppi_PM_ID, leppi_MP_ID, leppi_PP_ID, leprho_MM_jet, leprho_PM_jet, leprho_MP_jet, leprho_PP_jet, leprho_MM_ID, leprho_PM_ID, leprho_MP_ID, leprho_PP_ID, rhorho_MM_jet, rhorho_PM_jet, rhorho_MP_jet, rhorho_PP_jet, rhorho_MM_ID, rhorho_PM_ID, rhorho_MP_ID, rhorho_PP_ID
 
 
 def sample_data(test, model, flags, sample_name):
@@ -140,23 +187,28 @@ def sample_data(test, model, flags, sample_name):
     total_jet = hvd.allgather(total_jet)
     EventID = hvd.allgather(tf.constant(EventID)).numpy()
     event_type = hvd.allgather(tf.constant(event_type)).numpy()
-    pipi_jet, pirho_jet, leppi_jet, leprho_jet, qcd_jet, rhorho_jet, tt_jet, wlnu_jet, wtaunu_jet, zll_jet, pipi_MM_jet, pipi_PM_jet, pipi_MP_jet, pipi_PP_jet, pipi_ID, pirho_ID, leppi_ID, leprho_ID, qcd_ID, rhorho_ID, tt_ID, wlnu_ID, wtaunu_ID, zll_ID, pipi_MM_ID, pipi_PM_ID, pipi_MP_ID, pipi_PP_ID = data_split(total_jet, EventID, event_type)
+    pipi_jet, pirho_jet, leppi_jet, leprho_jet, qcd_jet, rhorho_jet, tt_jet, wlnu_jet, wtaunu_jet, zll_jet, pipi_MM_jet, pipi_PM_jet, pipi_MP_jet, pipi_PP_jet, pipi_ID, pirho_ID, leppi_ID, leprho_ID, qcd_ID, rhorho_ID, tt_ID, wlnu_ID, wtaunu_ID, zll_ID, pipi_MM_ID, pipi_PM_ID, pipi_MP_ID, pipi_PP_ID, pirho_MM_jet, pirho_PM_jet, pirho_MP_jet, pirho_PP_jet, pirho_MM_ID, pirho_PM_ID, pirho_MP_ID, pirho_PP_ID, leppi_MM_jet, leppi_PM_jet, leppi_MP_jet, leppi_PP_jet, leppi_MM_ID, leppi_PM_ID, leppi_MP_ID, leppi_PP_ID, leprho_MM_jet, leprho_PM_jet, leprho_MP_jet, leprho_PP_jet, leprho_MM_ID, leprho_PM_ID, leprho_MP_ID, leprho_PP_ID, rhorho_MM_jet, rhorho_PM_jet, rhorho_MP_jet, rhorho_PP_jet, rhorho_MM_ID, rhorho_PM_ID, rhorho_MP_ID, rhorho_PP_ID = data_split(total_jet, EventID, event_type)
 
     if hvd.rank() == 0:
-        def save_if_not_empty(jet, ID, sample_name, particle_type):
+        def save_if_not_empty(jet, ID, sample_name, particle_type, save_empty=False):
             if jet.shape[0] > 0:
                 data_dict = {
                     'nu_p': jet[:, :, :3],
                     'nu_m': jet[:, :, 3:],
                     'EventID': ID,
                 }
+                np.savez(sample_name.replace("merged", particle_type), **data_dict)
+                
             else:
-                data_dict = {
-                    'nu_p': [],
-                    'nu_m': [],
-                    'EventID': [],
-                }
-            np.savez(sample_name.replace("merged", particle_type), **data_dict)
+                if save_empty:
+                    data_dict = {
+                        'nu_p': [],
+                        'nu_m': [],
+                        'EventID': [],
+                    }
+                    np.savez(sample_name.replace("merged", particle_type), **data_dict)
+                else:
+                    pass
 
         save_if_not_empty(pipi_jet, pipi_ID, sample_name, "pi_pi_particles")
         save_if_not_empty(pirho_jet, pirho_ID, sample_name, "pi_rho_particles")
@@ -172,69 +224,24 @@ def sample_data(test, model, flags, sample_name):
         save_if_not_empty(pipi_PM_jet, pipi_PM_ID, sample_name, "pi_pi_PM_particles")
         save_if_not_empty(pipi_MP_jet, pipi_MP_ID, sample_name, "pi_pi_MP_particles")
         save_if_not_empty(pipi_PP_jet, pipi_PP_ID, sample_name, "pi_pi_PP_particles")
-
+        save_if_not_empty(pirho_MM_jet, pirho_MM_ID, sample_name, "pi_rho_MM_particles")
+        save_if_not_empty(pirho_PM_jet, pirho_PM_ID, sample_name, "pi_rho_PM_particles")
+        save_if_not_empty(pirho_MP_jet, pirho_MP_ID, sample_name, "pi_rho_MP_particles")
+        save_if_not_empty(pirho_PP_jet, pirho_PP_ID, sample_name, "pi_rho_PP_particles")
+        save_if_not_empty(leppi_MM_jet, leppi_MM_ID, sample_name, "lep_pi_MM_particles")
+        save_if_not_empty(leppi_PM_jet, leppi_PM_ID, sample_name, "lep_pi_PM_particles")
+        save_if_not_empty(leppi_MP_jet, leppi_MP_ID, sample_name, "lep_pi_MP_particles")
+        save_if_not_empty(leppi_PP_jet, leppi_PP_ID, sample_name, "lep_pi_PP_particles")
+        save_if_not_empty(leprho_MM_jet, leprho_MM_ID, sample_name, "lep_rho_MM_particles")
+        save_if_not_empty(leprho_PM_jet, leprho_PM_ID, sample_name, "lep_rho_PM_particles")
+        save_if_not_empty(leprho_MP_jet, leprho_MP_ID, sample_name, "lep_rho_MP_particles")
+        save_if_not_empty(leprho_PP_jet, leprho_PP_ID, sample_name, "lep_rho_PP_particles")
+        save_if_not_empty(rhorho_MM_jet, rhorho_MM_ID, sample_name, "rho_rho_MM_particles")
+        save_if_not_empty(rhorho_PM_jet, rhorho_PM_ID, sample_name, "rho_rho_PM_particles")
+        save_if_not_empty(rhorho_MP_jet, rhorho_MP_ID, sample_name, "rho_rho_MP_particles")
+        save_if_not_empty(rhorho_PP_jet, rhorho_PP_ID, sample_name, "rho_rho_PP_particles")
         
-        
-            
-            
-def get_generated_data(sample_name):
-    with h5.File(sample_name,"r") as h5f:
-        jets_gen = h5f['jet'][:]
-        particles_gen = h5f['part'][:]
-        
-    return jets_gen, particles_gen
-
-
-
-def plot(jet1,jet2,title,plot_folder):
-    var_names = ['Neutrino p$_{x}$ [GeV]', 'Neutrino p$_{y}$ [GeV]','Neutrino p$_{z}$ [GeV]','M$_W$ [GeV]']
-    
-    for ivar in range(len(var_names)):                    
-        feed_dict = {
-            'nu_truth':jet1[:,ivar],
-            'nu_gen':  jet2[:,ivar]
-        }
-        
-
-        fig,gs,binning = plot_utils.HistRoutine(feed_dict,xlabel=var_names[ivar],
-                                                plot_ratio=True,
-                                                reference_name='nu_truth',
-                                                ylabel= 'Normalized entries')
-        ax0 = plt.subplot(gs[0])     
-        fig.savefig('{}/Neutrino_{}_{}.pdf'.format(plot_folder,title,ivar),bbox_inches='tight')
-
-            
-def plot_results(jets, jets_gen, particles, particles_gen, flags):
-    """ Plot the results using the utility functions. """
-    plot(jets, jets_gen, title='Jet', plot_folder=flags.plot_folder)
-
-def add_w(nu,part):
-    def get_pxyz(arr):
-        pT = arr[:,0]
-        eta = arr[:,1]
-        phi = arr[:,2]
-        E = arr[:,3]
-        px = pT*np.cos(phi)
-        py = pT*np.sin(phi)
-        pz = pT*np.sinh(eta)
-        return np.stack([px,py,pz],-1)
-    
-    def get_ptetaphi(arr):
-        px = arr[:,0]
-        py = arr[:,1]
-        pz = arr[:,2]
-        pT = np.sqrt(px**2 + py**2)
-        eta = 0.5*np.log((np.sqrt(px**2 + py**2 + pz**2) + pz)/(np.sqrt(px**2 + py**2 + pz**2) - pz))
-        phi = np.arctan2(py,px)
-        return np.stack([pT,eta,phi],-1)
-
-    lepton = get_pxyz(part[:,0])
-    e_lep = np.sqrt(np.sum(lepton**2,1,keepdims=True))
-    e_nu = np.sqrt(np.sum(nu**2,1,keepdims=True))
-    w = lepton + nu
-    lepton_0 = get_ptetaphi(part[:,0])
-    mw2 = (e_lep+e_nu)**2 - np.sum(w**2,1,keepdims=True)
-    return np.concatenate([nu,np.sqrt(np.abs(mw2))],-1)
+        os.system("chmod -R 777 /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/")
     
 
 def main():
@@ -242,28 +249,18 @@ def main():
     utils.setup_gpus()
     if hvd.rank()==0:logging.info("Horovod and GPUs initialized successfully.")
     flags = parse_arguments()
-    
+    # if hvd.rank()==0:os.system("chmod -R 777  /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250125_new_fake/results/pi_pi/")
     if flags.sample:
         if hvd.rank()==0:logging.info("Sampling the data without boost.")
         test_path_list, test_loader_list, model = load_data_and_model(flags)
         for i in range(len(test_path_list)):
             test_name = test_path_list[i].replace(".pkl", "_eval.npz")
-            if os.path.exists(test_name.replace("merged", "pi_pi_particles")):
+            if os.path.exists(test_name.replace("merged", "Zll_particles")) or os.path.exists(test_name.replace("merged", "pi_pi_particles")):
                 continue
             else:
                 if hvd.rank()==0:logging.info("Sampling the {}.".format(test_name))
                 test = test_loader_list[i]
                 sample_data(test, model, flags, test_name)
-    else:
-        if hvd.rank()==0:logging.info("Loading saved samples.")
-        # Load and process data, generate plots, etc.        
-        test = get_data_info(flags)
-        particles,_,_,jets,_ = test.make_eval_data()
-        jets_gen, particles_gen = get_generated_data(sample_name)
-        jets = add_w(jets,particles)
-        jets_gen = add_w(jets_gen,particles_gen)
-        # Plot results
-        plot_results(jets, jets_gen, particles, particles_gen, flags)
 
 if __name__ == '__main__':
     main()

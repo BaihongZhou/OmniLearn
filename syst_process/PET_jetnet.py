@@ -184,8 +184,8 @@ class PET_jetnet(keras.Model):
                                       x['input_mask'],
                                     perturbed_x,t,y])
             
-            
             v_jet = alpha * eps - sigma * x['input_jet']
+            
             loss = tf.reduce_mean(tf.square(v_pred-v_jet))
 
 
@@ -225,7 +225,7 @@ class PET_jetnet(keras.Model):
         v_jet = alpha * eps - sigma * x['input_jet']
         loss = tf.reduce_mean(tf.square(v_pred-v_jet))
             
-        self.loss_tracker.update_state(loss)            
+        self.loss_tracker.update_state(loss)
         return {m.name: m.result() for m in self.metrics}
             
     def call(self,x):        

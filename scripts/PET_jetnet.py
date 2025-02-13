@@ -256,7 +256,7 @@ class PET_jetnet(keras.Model):
             cond = cond_split[i]
             
             jet_candidate = []
-            for _ in range(10):
+            for _ in range(50):
                 # jet = self.DDPMSampler(part,point,mask,cond,
                 #                        [self.ema_body,self.ema_head],
                 #                        data_shape=[part.shape[0],self.num_jet],
@@ -272,7 +272,7 @@ class PET_jetnet(keras.Model):
                 jet_candidate.append(jet)
             
             total_jets = np.concatenate(jet_candidate,1)
-            total_jets = np.array(total_jets).reshape(-1, 10, jet.shape[1])
+            total_jets = np.array(total_jets).reshape(-1, 50, jet.shape[1])
             jet_total.append(total_jets)
         return np.concatenate(jet_total)
 

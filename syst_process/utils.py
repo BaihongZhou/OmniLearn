@@ -592,20 +592,48 @@ class RecoNuPionDataLoaderWithNpzForSample(DataLoader):
         self.num_jet = self.jet.shape[1]
 
 class RecoTauDataLoaderWithPKLForSample(DataLoader):
-    def __init__(self, path, batch_size=1024,rank=0,size=1, nevts=None, data_type='val'):
+    def __init__(self, path, batch_size=1024,rank=0,size=1, nevts=None, samples_name='none'):
         super().__init__(path, batch_size, rank, size)
 
-        self.load_data(path, batch_size,rank,size,nevts, data_type)
+        self.load_data(path, batch_size,rank,size,nevts)
 
-        self.mean_part = [25.932678, 0.0, 0.0, 70.54288, 0.0]
-        self.std_part = [17.061451, 1.0, 1.0, 115.62893, 1.0]
-        if self.data_type == 'Lorentz':
-            print("Use Lorentz")
-            self.mean_jet = [5.766e-2, 0.0,  0.0, -1.848e-2, 0.0,  0.0]
-            self.std_jet  = [1.400e+1, 1.0,  1.0, 1.409e+1, 1.0,  1.0]
+        if samples_name == 'pi_pi':
+            self.mean_part = [2.59163526e+01, 0.0, 0.0, 7.05392784e+01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [17.0718089, 1.0, 1.0, 115.65273143, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [0.01682312963810866, 0.016733380409220386, 0.08293679661612122, 0.021420429070607164, -0.0006042911085853564, -0.013209993791164207]
+            self.std_jet  = [13.975173949266443, 13.981232817525068, 38.85618917630569, 14.059869543855184, 14.097959985975313, 40.51226330089419]
+        elif samples_name == 'e_pi':
+            self.mean_part = [2.470e+1, 0.0, 0.0, 6.949e+1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [1.750e+1, 1.0, 1.0, 1.192e+2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [2.198e-2, 1.831e-2, -4.410e-3, -1.366e-2, 3.675e-2, 1.322e-1]
+            self.std_jet  = [1.569e+1, 1.582e+1, 4.252e+1, 1.825e+1, 1.823e+1, 5.234e+1]
+        elif samples_name == 'e_rho':
+            self.mean_part = [2.496e+1, 0.0, 0.0, 6.744e+1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [2.320e+1, 1.0, 1.0, 1.296e+2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [-3.918e-2, -8.923e-2, 8.916e-2, 1.457e-1, -2.469e-2, 4.867e-1]
+            self.std_jet  = [1.556e+1, 1.586e+1, 3.483e+1, 2.030e+1, 2.000e+1, 5.815e+1]
+        elif samples_name == 'mu_pi':
+            self.mean_part = [2.449e+1, 0.0, 0.0, 7.038e+1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [1.742e+1, 1.0, 1.0, 1.194e+2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [-3.981e-2, 2.796e-3, 1.387e-1, 3.514e-2, 3.003e-2, 9.278e-3]
+            self.std_jet  = [1.575e+1, 1.578e+1, 4.335e+1, 1.807e+1, 1.808e+1, 5.269e+1]
+        elif samples_name == 'mu_rho':
+            self.mean_part = [2.477e+1, 0.0, 0.0, 6.809e+1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [2.375e+1, 1.0, 1.0, 1.363e+2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [5.372e-2, 1.312e-1, -3.785e-2, 3.895e-2, -8.385e-2, -1.141e-1]
+            self.std_jet  = [1.515e+1, 1.512e+1, 3.482e+1, 2.002e+1, 1.986e+1, 5.879e+1]
+        elif samples_name == 'pi_rho':
+            self.mean_part = [2.544e+1, 0.0, 0.0, 6.669e+1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [2.407e+1, 1.0, 1.0, 1.257e+2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [3.180e-2, 7.701e-2, -4.538e-2, 3.208e-2, 6.013e-2, 1.542e-1]
+            self.std_jet  = [1.498e+1, 1.492e+1, 3.683e+1, 1.816e+1, 1.772e+1, 5.284e+1]
+        elif samples_name == 'rho_rho':
+            self.mean_part = [2.580e+1, 0.0, 0.0, 6.578e+1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            self.std_part = [3.154e+1, 1.0, 1.0, 1.374e+2, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            self.mean_jet = [2.514e-1, 5.067e-1, -4.509e-1, -1.008e-1, 4.397e-1, 1.293e+0]
+            self.std_jet  = [1.932e+1, 1.988e+1, 4.263e+1, 1.875e+1, 1.908e+1, 4.625e+1]
         else:
-            self.mean_jet = [0.05766123, 0.014943519, 0.084477596, -0.01847846, -0.0021721262, -0.016755389]
-            self.std_jet  = [14.002326, 13.991539, 38.890766, 14.091634, 14.086069, 40.51254]
+            raise ValueError('samples_name is not valid')
         self.num_pad = 0
         self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
         
@@ -614,13 +642,12 @@ class RecoTauDataLoaderWithPKLForSample(DataLoader):
         self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
         self.files = [path]
     
-    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None,data_type='val'):
+    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
         import vector
         import pickle
         self.path = path
-        self.data_type = data_type
         # Load all the data from the npz files
-        with open(path, 'rb') as f:
+        with open(self.path, 'rb') as f:
             data = pickle.load(f)
         
         val_num = -1 if nevts is None else nevts
@@ -630,30 +657,48 @@ class RecoTauDataLoaderWithPKLForSample(DataLoader):
         pMET = data['MET'][rank:nevts:size]
         EventID = data['EventID'][rank:nevts:size]
         samples = data['sample'][rank:nevts:size]
-        ptau_p_child1 = data['tau_p_constituent_1'][rank:nevts:size]
-        ptau_p_child2 = data['tau_p_constituent_2'][rank:nevts:size]
-        ptau_m_child1 = data['tau_m_constituent_1'][rank:nevts:size]
-        ptau_m_child2 = data['tau_m_constituent_2'][rank:nevts:size]
-        jet_1 = np.stack([pjet_1.pt, pjet_1.eta, pjet_1.phi, pjet_1.E], -1)
-        jet_2 = np.stack([pjet_2.pt, pjet_2.eta, pjet_2.phi, pjet_2.E], -1)
-        jet_3 = np.stack([pjet_3.pt, pjet_3.eta, pjet_3.phi, pjet_3.E], -1)
+        ptau_p_child1 = data['tau_p_child1'][rank:nevts:size]
+        ptau_p_child2 = data['tau_p_child2'][rank:nevts:size]
+        ptau_m_child1 = data['tau_m_child1'][rank:nevts:size]
+        ptau_m_child2 = data['tau_m_child2'][rank:nevts:size]
+        tau_p_child1_charge = data['tau_p_child1_charge'][rank:nevts:size]
+        tau_p_child1_is_el = data['tau_p_child1_is_el'][rank:nevts:size]
+        tau_p_child1_is_mu = data['tau_p_child1_is_mu'][rank:nevts:size]
+        tau_p_child1_is_charged_pion = data['tau_p_child1_is_charged_pion'][rank:nevts:size]
+        tau_p_child1_is_neutral_part = data['tau_p_child1_is_neutral_part'][rank:nevts:size]
+        tau_p_child2_charge = data['tau_p_child2_charge'][rank:nevts:size]
+        tau_p_child2_is_el = data['tau_p_child2_is_el'][rank:nevts:size]
+        tau_p_child2_is_mu = data['tau_p_child2_is_mu'][rank:nevts:size]
+        tau_p_child2_is_charged_pion = data['tau_p_child2_is_charged_pion'][rank:nevts:size]
+        tau_p_child2_is_neutral_part = data['tau_p_child2_is_neutral_part'][rank:nevts:size]
+        tau_m_child1_charge = data['tau_m_child1_charge'][rank:nevts:size]
+        tau_m_child1_is_el = data['tau_m_child1_is_el'][rank:nevts:size]
+        tau_m_child1_is_mu = data['tau_m_child1_is_mu'][rank:nevts:size]
+        tau_m_child1_is_charged_pion = data['tau_m_child1_is_charged_pion'][rank:nevts:size]
+        tau_m_child1_is_neutral_part = data['tau_m_child1_is_neutral_part'][rank:nevts:size]
+        tau_m_child2_charge = data['tau_m_child2_charge'][rank:nevts:size]
+        tau_m_child2_is_el = data['tau_m_child2_is_el'][rank:nevts:size]
+        tau_m_child2_is_mu = data['tau_m_child2_is_mu'][rank:nevts:size]
+        tau_m_child2_is_charged_pion = data['tau_m_child2_is_charged_pion'][rank:nevts:size]
+        tau_m_child2_is_neutral_part = data['tau_m_child2_is_neutral_part'][rank:nevts:size]
+        jet_1 = np.stack([pjet_1.pt, pjet_1.eta, pjet_1.phi, pjet_1.E, np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt)], -1)
+        jet_2 = np.stack([pjet_2.pt, pjet_2.eta, pjet_2.phi, pjet_2.E, np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt)], -1)
+        jet_3 = np.stack([pjet_3.pt, pjet_3.eta, pjet_3.phi, pjet_3.E, np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt)], -1)
         MET = np.stack([pMET.pt, pMET.phi], -1)
-        tau_p_child1 = np.stack([ptau_p_child1.pt, ptau_p_child1.eta, ptau_p_child1.phi, ptau_p_child1.E], -1)
-        tau_p_child2 = np.stack([ptau_p_child2.pt, ptau_p_child2.eta, ptau_p_child2.phi, ptau_p_child2.E], -1)
-        tau_m_child1 = np.stack([ptau_m_child1.pt, ptau_m_child1.eta, ptau_m_child1.phi, ptau_m_child1.E], -1)
-        tau_m_child2 = np.stack([ptau_m_child2.pt, ptau_m_child2.eta, ptau_m_child2.phi, ptau_m_child2.E], -1)
+        tau_p_child1 = np.stack([ptau_p_child1.pt, ptau_p_child1.eta, ptau_p_child1.phi, ptau_p_child1.E, tau_p_child1_charge, tau_p_child1_is_el, tau_p_child1_is_mu, tau_p_child1_is_charged_pion, tau_p_child1_is_neutral_part], -1)
+        tau_p_child2 = np.stack([ptau_p_child2.pt, ptau_p_child2.eta, ptau_p_child2.phi, ptau_p_child2.E, tau_p_child2_charge, tau_p_child2_is_el, tau_p_child2_is_mu, tau_p_child2_is_charged_pion, tau_p_child2_is_neutral_part], -1)
+        tau_m_child1 = np.stack([ptau_m_child1.pt, ptau_m_child1.eta, ptau_m_child1.phi, ptau_m_child1.E, tau_m_child1_charge, tau_m_child1_is_el, tau_m_child1_is_mu, tau_m_child1_is_charged_pion, tau_m_child1_is_neutral_part], -1)
+        tau_m_child2 = np.stack([ptau_m_child2.pt, ptau_m_child2.eta, ptau_m_child2.phi, ptau_m_child2.E, tau_m_child2_charge, tau_m_child2_is_el, tau_m_child2_is_mu, tau_m_child2_is_charged_pion, tau_m_child2_is_neutral_part], -1)
         del pjet_1, pjet_2, pjet_3, pMET, ptau_p_child1, ptau_p_child2, ptau_m_child1, ptau_m_child2
          
         self.EventID = EventID
         self.event_type = samples
-        # self.event_type = data["sample"][rank:nevts:size]
-        # For truth level study, self.X are all the truth tau children
+        
         self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1])], axis=1)
         self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
         
         #add a one label to identify particles
         self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
-        self.labels[:,2:] = 2
         if self.X.shape[1] > 4:
             self.labels[:,4:] = 0
         # for padding particles, the label is 0
@@ -664,8 +709,6 @@ class RecoTauDataLoaderWithPKLForSample(DataLoader):
         # For truth level study, self.y are the MET
         self.y = MET #met pT, met_phi
         #let's normalize the met pT
-        # Check for NaN values after log transformation
-        self.orin_y = self.y.copy()
         self.y[:,0] = np.log(self.y[:,0])
         self.mask = self.X[:,:,2]!=0
 

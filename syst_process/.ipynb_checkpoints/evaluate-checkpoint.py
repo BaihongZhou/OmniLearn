@@ -54,7 +54,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
     # parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics", help="Folder containing input files")
-    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/", help="Folder containing input files")
+    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--train_channel", type=str, default="pi_pi", help="Batch size")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
@@ -72,7 +72,7 @@ def parse_arguments():
 def load_data_and_model(flags):
     
     truth_path = flags.folder
-    truth_path_list = [path for path in glob.glob(truth_path + flags.train_channel + '/systematics/variation.*/merged.pkl') if (path.split('/')[-2].split('.')[-1] == 'minus' and path.split('/')[-2].split('.')[-2] != 'soft_met')]
+    truth_path_list = [path for path in glob.glob(truth_path + flags.train_channel + '/systematics/variation.*/merged.pkl') if (path.split('/')[-2].split('.')[-1] == 'plus' and path.split('/')[-2].split('.')[-2] != 'soft_met')]
     test_loader_list = []
     for truth_path in truth_path_list:
         test_loader_list.append(utils.RecoTauDataLoaderWithPKLForSample(truth_path,rank=hvd.rank(),size=hvd.size(),samples_name=flags.train_channel))
@@ -210,7 +210,7 @@ def sample_data(test, model, flags, sample_name):
                 else:
                     pass
 
-        save_if_not_empty(pipi_jet, pipi_ID, sample_name, "pi_pi_particles")
+        save_if_not_empty(pipi_jet, pipi_ID, sample_name, "pi_pi_particles", save_empty=True)
         save_if_not_empty(pirho_jet, pirho_ID, sample_name, "pi_rho_particles")
         save_if_not_empty(leppi_jet, leppi_ID, sample_name, "lep_pi_particles")
         save_if_not_empty(leprho_jet, leprho_ID, sample_name, "lep_rho_particles")
@@ -241,8 +241,7 @@ def sample_data(test, model, flags, sample_name):
         save_if_not_empty(rhorho_MP_jet, rhorho_MP_ID, sample_name, "rho_rho_MP_particles")
         save_if_not_empty(rhorho_PP_jet, rhorho_PP_ID, sample_name, "rho_rho_PP_particles")
         
-        os.system("chmod -R 777 /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/")
-
+        # os.system("chmod -R 777 /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/")
     
 
 def main():
@@ -256,7 +255,7 @@ def main():
         test_path_list, test_loader_list, model = load_data_and_model(flags)
         for i in range(len(test_path_list)):
             test_name = test_path_list[i].replace(".pkl", "_eval.npz")
-            if os.path.exists(test_name.replace("merged", "Zll_particles")) or os.path.exists(test_name.replace("merged", "pi_pi_particles")):
+            if os.path.exists(test_name.replace("merged", "pi_pi_particles")):
                 continue
             else:
                 if hvd.rank()==0:logging.info("Sampling the {}.".format(test_name))

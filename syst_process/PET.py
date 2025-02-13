@@ -12,19 +12,19 @@ class PET(keras.Model):
                  num_feat,
                  num_jet,      
                  num_classes=2,
-                 num_keep = 7, #Number of features that wont be dropped
+                 num_keep = 11, #Number of features that wont be dropped
                  feature_drop = 0.1,
                  projection_dim = 128,
                  local = True, K = 2,
                  num_local = 2, 
                  num_layers = 8, num_class_layers=2,
-                 num_gen_layers = 2,
-                 num_heads = 4,drop_probability = 0.0,
+                 num_gen_layers = 3,
+                 num_heads = 8,drop_probability = 0.0,
                  simple = False, layer_scale = True,
                  layer_scale_init = 1e-5,        
                  talking_head = False,
                  mode = 'classifier',
-                 num_diffusion = 3,
+                 num_diffusion = 6,
                  dropout=0.0,
                  class_activation=None,
                  ):
@@ -309,9 +309,6 @@ class PET(keras.Model):
                  local, K,num_local,
                  talking_head,
                  ):
-
-
-
         
         #Randomly drop features not present in other datasets
         encoded  = RandomDrop(self.feature_drop if  'all' in self.mode else 0.0,num_skip=self.num_keep)(input_features)                        
@@ -458,14 +455,14 @@ class PET(keras.Model):
             encoded = layers.Dense(self.num_feat)(encoded)*mask
 
         else:
-            for _ in range(num_layers):
+            for i in range(num_layers):
                 concatenated = layers.Add()([cond_token , encoded])
                 x1 = layers.GroupNormalization(groups=1)(concatenated)
 
                 updates = layers.MultiHeadAttention(num_heads=self.num_heads,
                                                     key_dim=self.projection_dim//self.num_heads)(
                                                         query=x1, value=x1, key=x1)
-                
+
                 if self.layer_scale:
                     updates = LayerScale(self.layer_scale_init, self.projection_dim)(updates,mask)
 
@@ -475,7 +472,7 @@ class PET(keras.Model):
                 x3 = layers.Dense(self.projection_dim)(x3)
                 if self.layer_scale:
                     x3 = LayerScale(self.layer_scale_init, self.projection_dim)(x3,mask)
-                cond_token = layers.Add()([x3,x2])
+                cond_token = layers.Add()([x3,x2])            
 
             encoded = layers.GroupNormalization(groups=1)(cond_token+encoded)
             encoded = layers.GlobalAveragePooling1D()(encoded)

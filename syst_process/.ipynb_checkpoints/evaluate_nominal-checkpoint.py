@@ -54,7 +54,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
     # parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics", help="Folder containing input files")
-    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/", help="Folder containing input files")
+    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--train_channel", type=str, default="pi_pi", help="Batch size")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
@@ -72,7 +72,7 @@ def parse_arguments():
 def load_data_and_model(flags):
     
     truth_path = flags.folder
-    truth_path_list = [path for path in glob.glob(truth_path + flags.train_channel + '/systematics/variation.*/merged.pkl') if (path.split('/')[-2].split('.')[-1] == 'minus' and path.split('/')[-2].split('.')[-2] != 'soft_met')]
+    truth_path_list = [truth_path + flags.train_channel + '/ml_export/merged.pkl']
     test_loader_list = []
     for truth_path in truth_path_list:
         test_loader_list.append(utils.RecoTauDataLoaderWithPKLForSample(truth_path,rank=hvd.rank(),size=hvd.size(),samples_name=flags.train_channel))
@@ -87,20 +87,21 @@ def load_data_and_model(flags):
                        simple=flags.simple, layer_scale=flags.layer_scale,
                        talking_head=flags.talking_head,
                        mode=flags.mode, fine_tune=False, model_name=None, use_mean=flags.fine_tune)
-    if flags.train_channel == "pi_pi":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_8_local_layer_scale_token_baseline_generator.weights.h5"
-    elif flags.train_channel == "pi_rho":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pirho_8_local_layer_scale_token_baseline_generator.weights.h5"
-    elif flags.train_channel == "e_pi":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_epi_8_local_layer_scale_token_baseline_generator.weights.h5"
-    elif flags.train_channel == "e_rho":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_erho_8_local_layer_scale_token_baseline_generator.weights.h5"
-    elif flags.train_channel == "mu_pi":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_mupi_8_local_layer_scale_token_baseline_generator.weights.h5"
-    elif flags.train_channel == "mu_rho":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_murho_8_local_layer_scale_token_baseline_generator.weights.h5"
-    elif flags.train_channel == "rho_rho":
-        model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_rhorho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # if flags.train_channel == "pi_pi":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # elif flags.train_channel == "pi_rho":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pirho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # elif flags.train_channel == "e_pi":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_epi_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # elif flags.train_channel == "e_rho":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_erho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # elif flags.train_channel == "mu_pi":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_mupi_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # elif flags.train_channel == "mu_rho":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_murho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # elif flags.train_channel == "rho_rho":
+    #     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_rhorho_8_local_layer_scale_token_baseline_generator.weights.h5"
+    model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_mix_8_local_layer_scale_token_baseline_generator.weights.h5"
     model.load_weights(model_name)
     return truth_path_list, test_loader_list, model
 
@@ -190,25 +191,20 @@ def sample_data(test, model, flags, sample_name):
     pipi_jet, pirho_jet, leppi_jet, leprho_jet, qcd_jet, rhorho_jet, tt_jet, wlnu_jet, wtaunu_jet, zll_jet, pipi_MM_jet, pipi_PM_jet, pipi_MP_jet, pipi_PP_jet, pipi_ID, pirho_ID, leppi_ID, leprho_ID, qcd_ID, rhorho_ID, tt_ID, wlnu_ID, wtaunu_ID, zll_ID, pipi_MM_ID, pipi_PM_ID, pipi_MP_ID, pipi_PP_ID, pirho_MM_jet, pirho_PM_jet, pirho_MP_jet, pirho_PP_jet, pirho_MM_ID, pirho_PM_ID, pirho_MP_ID, pirho_PP_ID, leppi_MM_jet, leppi_PM_jet, leppi_MP_jet, leppi_PP_jet, leppi_MM_ID, leppi_PM_ID, leppi_MP_ID, leppi_PP_ID, leprho_MM_jet, leprho_PM_jet, leprho_MP_jet, leprho_PP_jet, leprho_MM_ID, leprho_PM_ID, leprho_MP_ID, leprho_PP_ID, rhorho_MM_jet, rhorho_PM_jet, rhorho_MP_jet, rhorho_PP_jet, rhorho_MM_ID, rhorho_PM_ID, rhorho_MP_ID, rhorho_PP_ID = data_split(total_jet, EventID, event_type)
 
     if hvd.rank() == 0:
-        def save_if_not_empty(jet, ID, sample_name, particle_type, save_empty=False):
+        def save_if_not_empty(jet, ID, sample_name, particle_type):
             if jet.shape[0] > 0:
                 data_dict = {
                     'nu_p': jet[:, :, :3],
                     'nu_m': jet[:, :, 3:],
                     'EventID': ID,
                 }
-                np.savez(sample_name.replace("merged", particle_type), **data_dict)
-                
             else:
-                if save_empty:
-                    data_dict = {
-                        'nu_p': [],
-                        'nu_m': [],
-                        'EventID': [],
-                    }
-                    np.savez(sample_name.replace("merged", particle_type), **data_dict)
-                else:
-                    pass
+                data_dict = {
+                    'nu_p': [],
+                    'nu_m': [],
+                    'EventID': [],
+                }
+            np.savez(sample_name.replace("merged", particle_type), **data_dict)
 
         save_if_not_empty(pipi_jet, pipi_ID, sample_name, "pi_pi_particles")
         save_if_not_empty(pirho_jet, pirho_ID, sample_name, "pi_rho_particles")
@@ -241,8 +237,8 @@ def sample_data(test, model, flags, sample_name):
         save_if_not_empty(rhorho_MP_jet, rhorho_MP_ID, sample_name, "rho_rho_MP_particles")
         save_if_not_empty(rhorho_PP_jet, rhorho_PP_ID, sample_name, "rho_rho_PP_particles")
         
-        os.system("chmod -R 777 /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/")
-
+        
+        # os.system("chmod -R 777 /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/")
     
 
 def main():
@@ -255,8 +251,8 @@ def main():
         if hvd.rank()==0:logging.info("Sampling the data without boost.")
         test_path_list, test_loader_list, model = load_data_and_model(flags)
         for i in range(len(test_path_list)):
-            test_name = test_path_list[i].replace(".pkl", "_eval.npz")
-            if os.path.exists(test_name.replace("merged", "Zll_particles")) or os.path.exists(test_name.replace("merged", "pi_pi_particles")):
+            test_name = test_path_list[i].replace(".pkl", "_eval_mix.npz")
+            if os.path.exists(test_name.replace("merged", "pi_pi_particles")):
                 continue
             else:
                 if hvd.rank()==0:logging.info("Sampling the {}.".format(test_name))

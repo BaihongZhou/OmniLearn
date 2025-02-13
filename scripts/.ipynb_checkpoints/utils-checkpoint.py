@@ -682,12 +682,12 @@ class TruthTauDataLoader(DataLoader):
             self.std_jet  = [13.42809609, 13.45002563, 34.30393162, 14.25968134, 14.14313792, 41.19639211]
         self.num_pad = 0
         self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
-        self.samples_name = samples_name
         
         # self.y = np.identity(2)[self.y.astype(np.int32)]
         self.num_classes = self.y.shape[1]
         self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
         self.files = [path]
+    
     
     def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
         self.path = path
@@ -708,180 +708,6 @@ class TruthTauDataLoader(DataLoader):
         self.nevts = h5.File(self.path,'r')['X'].shape[0] if nevts is None else nevts
         self.num_part = self.X.shape[1]
         self.num_jet = self.jet.shape[1]
-    
-    def make_tfdata(self):
-        X = self.preprocess(self.X,self.mask).astype(np.float32)
-        X = self.pad(X,num_pad=self.num_pad)
-        jet = self.preprocess_jet(self.jet).astype(np.float32)
-
-        tf_zip = tf.data.Dataset.from_tensor_slices(
-            {'input_features':X,
-             'input_points':X[:,:,1:3],
-             'input_mask':self.mask.astype(np.float32),
-             'input_jet':jet})
-        
-
-        tf_y = tf.data.Dataset.from_tensor_slices(self.y)
-        del self.X, self.y,  self.mask
-        gc.collect()
-        if 'mix' not in self.samples_name:
-            return tf.data.Dataset.zip((tf_zip,tf_y)).cache().shuffle(self.batch_size*100).batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
-        else:
-            return tf.data.Dataset.zip((tf_zip,tf_y)).cache().batch(self.batch_size).prefetch(tf.data.AUTOTUNE)
-    
-class bbtautauDataLoader(DataLoader):
-    def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None, samples_name='none'):
-        super().__init__(path, batch_size, rank, size)
-        self.load_data(path, batch_size,rank,size,nevts)
-        if samples_name == 'hhttbbSM':
-            self.mean_part = [99.12940613614948, 0.0, 0.0, 190.3409851363821, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            self.std_part = [97.81503116199156, 1.0, 1.0, 231.1734540511601, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            self.mean_jet = [-0.03143388458228799, 0.013400031599242856, -0.06390768469344385, 0.04785082259827141, 0.030576754619164388, -0.05800961554289329]
-            self.std_jet  = [36.10516198780198, 36.09329637891902, 68.82980212931818, 36.140215385241376, 36.07982190831225, 68.16506397582349]
-        elif samples_name == 'ytautau':
-            self.mean_part = [4.399468828151318, 0.0, 0.0, 4.578788383572458, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            self.std_part = [0.6855830441157036, 1.0, 1.0, 0.5941599097765462, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            self.mean_jet = [2.5948820781754653, -0.0008049646671571237, -0.00017046534016040406, 2.6007468540359757, 0.0006967957027229116, 0.0009797699367518262]
-            self.std_jet  = [1.236177082837539, 0.8418778751786334, 2.1710597108353564, 1.2322794162034307, 0.8640643028110085, 2.169746764707149]
-        else:
-            self.mean_part = [114.35955789081106, 0.0, 0.0, 206.6822074094424, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            self.std_part = [584.8648776829244, 1.0, 1.0, 687.2951105318857, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            self.mean_jet = [-6.35372973e+01, 0.0, 0.0, -5.26062743e+01, 0.0, 0.0]
-            self.std_jet  = [1.40804824e+03, 6.43320126e-01, 1.76463674e+00, 5.95479769e+02, 6.56304430e-01, 1.76939807e+00]
-        self.num_pad = 0
-        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
-        
-        # self.y = np.identity(2)[self.y.astype(np.int32)]
-        self.num_classes = self.y.shape[1]
-        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
-        self.files = [path]
-    
-    
-    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
-        self.path = path
-        self.X = h5.File(self.path,'r')['X'][rank:nevts:size]
-        self.y = h5.File(self.path,'r')['MET'][rank:nevts:size]
-        self.jet = h5.File(self.path,'r')['nu'][rank:nevts:size]
-        #let's normalize the met pT
-        #add two different labels to identify particles
-        self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
-        if self.X.shape[1] > 2:
-            self.labels[:,2:] = 0
-        # for padding particles, the label is 0
-        self.labels[self.X[:,:,0]==0] = 0
-        self.X = np.concatenate([self.X,self.labels],-1)
-        self.y[:,0] = np.log(self.y[:,0])
-        self.mask = self.X[:,:,2]!=0
-        # self.batch_size = batch_size
-        self.nevts = h5.File(self.path,'r')['X'].shape[0] if nevts is None else nevts
-        self.num_part = self.X.shape[1]
-        self.num_jet = self.jet.shape[1]
-
-class ReconbbtautauDataLoader(DataLoader):
-    def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None, samples_name='none'):
-        super().__init__(path, batch_size, rank, size)
-        self.load_data(path, batch_size,rank,size,nevts)
-
-        # self.mean_part = [100.89102993433272, 0.0, 0.0, 151.0347667617762, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        # self.std_part = [613.1461658958464, 1.0, 1.0, 663.880564507324, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-        # self.mean_jet = [-0.02019436949448172, 0.004793397615395344, -0.00928370177240944, 0.020329528864186874, 0.014253567777505053, -0.0684684226934648]
-        # self.std_jet  = [28.423569127183523, 28.39254333850685, 62.168027202412496, 28.44154069964582, 28.40050628291428, 62.02001483200243]
-        if samples_name == 'hhttbbSM':
-            self.mean_part = [99.12940613614948, 0.0, 0.0, 190.3409851363821, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            self.std_part = [97.81503116199156, 1.0, 1.0, 231.1734540511601, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            self.mean_jet = [-0.03143388458228799, 0.013400031599242856, -0.06390768469344385, 0.04785082259827141, 0.030576754619164388, -0.05800961554289329]
-            self.std_jet  = [36.10516198780198, 36.09329637891902, 68.82980212931818, 36.140215385241376, 36.07982190831225, 68.16506397582349]
-        elif samples_name == 'ytautau':
-            self.mean_part = [4.399468828151318, 0.0, 0.0, 4.578788383572458, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            self.std_part = [0.6855830441157036, 1.0, 1.0, 0.5941599097765462, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            self.mean_jet = [2.5948820781754653, -0.0008049646671571237, -0.00017046534016040406, 2.6007468540359757, 0.0006967957027229116, 0.0009797699367518262]
-            self.std_jet  = [1.236177082837539, 0.8418778751786334, 2.1710597108353564, 1.2322794162034307, 0.8640643028110085, 2.169746764707149]
-        else:
-            self.mean_part = [114.35955789081106, 0.0, 0.0, 206.6822074094424, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            self.std_part = [584.8648776829244, 1.0, 1.0, 687.2951105318857, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-            self.mean_jet = [-6.35372973e+01, 0.0, 0.0, -5.26062743e+01, 0.0, 0.0]
-            self.std_jet  = [1.40804824e+03, 6.43320126e-01, 1.76463674e+00, 5.95479769e+02, 6.56304430e-01, 1.76939807e+00]
-        self.num_pad = 0
-        self.num_feat = self.X.shape[2] + self.num_pad #missing inputs
-        
-        # self.y = np.identity(2)[self.y.astype(np.int32)]
-        self.num_classes = self.y.shape[1]
-        self.steps_per_epoch = None #will pass none, otherwise needs to add repeat to tf data
-        self.files = [path]
-    
-    
-    def load_data(self,path, batch_size=512,rank=0,size=1,nevts=None):
-        self.path = path
-        import pickle
-        with open(path, 'rb') as f:
-            data = pickle.load(f)
-        # First import the data
-        self.truth_TauTau = data['truth_TauTau'][rank:nevts:size]
-        self.Tau1 = data['Tau1'][rank:nevts:size]
-        self.Tau1_nProng = data['Tau1_nProng'][rank:nevts:size]
-        self.Tau1_decayMode = data['Tau1_decayMode'][rank:nevts:size]
-        self.Tau1_charge = data['Tau1_charge'][rank:nevts:size]
-        self.Tau2 = data['Tau2'][rank:nevts:size]
-        self.Tau2_nProng = data['Tau2_nProng'][rank:nevts:size]
-        self.Tau2_decayMode = data['Tau2_decayMode'][rank:nevts:size]
-        self.Tau2_charge = data['Tau2_charge'][rank:nevts:size]
-        self.Jet_b1 = data['Jet_b1'][rank:nevts:size]
-        self.Jet_b2 = data['Jet_b2'][rank:nevts:size]
-        self.Jet_0 = data['Jet_0'][rank:nevts:size]
-        self.Jet_1 = data['Jet_1'][rank:nevts:size]
-        self.Jet_2 = data['Jet_2'][rank:nevts:size]
-        self.met = data['met'][rank:nevts:size]
-        self.truth_nu1 = data['truth_nu1'][rank:nevts:size]
-        self.truth_nu2 = data['truth_nu2'][rank:nevts:size]
-        self.mmc = data['mmc'][rank:nevts:size]
-        self.sum_metTauTau = data['sum_metTauTau'][rank:nevts:size]
-        self.weight_mc = data['weight_mc'][rank:nevts:size]
-        self.eventNumber = data['eventNumber'][rank:nevts:size]
-        self.runNumber = data['runNumber'][rank:nevts:size]
-        self.n_jets = data['n_jets'][rank:nevts:size]
-        # Then process the data:
-        import vector
-        import numpy as np
-        tau1 = vector.array({"pt":self.Tau1[:,0],"eta":self.Tau1[:,1],"phi":self.Tau1[:,2],"mass":self.Tau1[:,3]})
-        tau2 = vector.array({"pt":self.Tau2[:,0],"eta":self.Tau2[:,1],"phi":self.Tau2[:,2],"mass":self.Tau2[:,3]})
-        jet_b1 = vector.array({"pt":self.Jet_b1[:,0],"eta":self.Jet_b1[:,1],"phi":self.Jet_b1[:,2],"mass":self.Jet_b1[:,3]})
-        jet_b2 = vector.array({"pt":self.Jet_b2[:,0],"eta":self.Jet_b2[:,1],"phi":self.Jet_b2[:,2],"mass":self.Jet_b2[:,3]})
-        jet_0 = vector.array({"pt":self.Jet_0[:,0],"eta":self.Jet_0[:,1],"phi":self.Jet_0[:,2],"mass":self.Jet_0[:,3]})
-        jet_1 = vector.array({"pt":self.Jet_1[:,0],"eta":self.Jet_1[:,1],"phi":self.Jet_1[:,2],"mass":self.Jet_1[:,3]})
-        jet_2 = vector.array({"pt":self.Jet_2[:,0],"eta":self.Jet_2[:,1],"phi":self.Jet_2[:,2],"mass":self.Jet_2[:,3]})
-        met = vector.array({"pt":self.met[:,0],"phi":self.met[:,2]})
-        temp_tau1 = np.concatenate([tau1.pt, tau1.eta, tau1.phi, tau1.E, self.Tau1_charge, self.Tau1_decayMode, self.Tau1_nProng],-1)
-        temp_tau2 = np.concatenate([tau2.pt, tau2.eta, tau2.phi, tau2.E, self.Tau2_charge, self.Tau2_decayMode, self.Tau2_nProng],-1)
-        temp_b1 = np.concatenate([jet_b1.pt, jet_b1.eta, jet_b1.phi, jet_b1.E, np.zeros_like(jet_b1.pt), np.zeros_like(jet_b1.pt), np.zeros_like(jet_b1.pt)],-1)
-        temp_b2 = np.concatenate([jet_b2.pt, jet_b2.eta, jet_b2.phi, jet_b2.E, np.zeros_like(jet_b2.pt), np.zeros_like(jet_b2.pt), np.zeros_like(jet_b2.pt)],-1)
-        temp_jet1 = np.concatenate([jet_0.pt, jet_0.eta, jet_0.phi, jet_0.E, np.zeros_like(jet_0.pt), np.zeros_like(jet_0.pt), np.zeros_like(jet_0.pt)],-1)
-        temp_jet2 = np.concatenate([jet_1.pt, jet_1.eta, jet_1.phi, jet_1.E, np.zeros_like(jet_1.pt), np.zeros_like(jet_1.pt), np.zeros_like(jet_1.pt)],-1)
-        temp_jet3 = np.concatenate([jet_2.pt, jet_2.eta, jet_2.phi, jet_2.E, np.zeros_like(jet_2.pt), np.zeros_like(jet_2.pt), np.zeros_like(jet_2.pt)],-1)
-        self.X = np.concatenate([temp_tau1.reshape(-1, 1, 7), temp_tau2.reshape(-1, 1, 7), temp_b1.reshape(-1, 1, 7), temp_b2.reshape(-1, 1, 7), temp_jet1.reshape(-1, 1, 7), temp_jet2.reshape(-1, 1, 7), temp_jet3.reshape(-1, 1, 7)], axis=1)
-        self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))
-        if self.X.shape[1] > 2:
-            self.labels[:,2:] = 0
-        self.X = np.concatenate([self.X,self.labels],-1)
-        self.mask = self.X[:,:,2]!=0
-        self.y = np.concatenate([met.pt.reshape(-1, 1), met.phi.reshape(-1, 1)],axis=1)
-        self.y[:,0] = np.log(self.y[:,0])
-        self.jet = np.concatenate([self.truth_nu1[:,:3], self.truth_nu2[:,:3]], axis=1)
-        # self.batch_size = batch_size
-        self.nevts = data['truth_TauTau'].shape[0] if nevts is None else nevts
-        self.num_part = self.X.shape[1]
-        self.num_jet = self.jet.shape[1]
-        del tau1, tau2, jet_b1, jet_b2, jet_0, jet_1, jet_2, met, temp_tau1, temp_tau2, temp_b1, temp_b2, temp_jet1, temp_jet2, temp_jet3
-        
-    def make_eval_data(self,preprocess=False):
-        if preprocess:
-            X = self.preprocess(self.X,self.mask).astype(np.float32)
-            X = self.pad(X,num_pad=self.num_pad)
-            jet = self.preprocess_jet(self.jet).astype(np.float32)
-        else:
-            X = self.X
-            pion = None
-            jet = self.jet
-        return X, X[:,:,1:3], self.mask.astype(np.float32), jet, self.y, self.truth_TauTau,self.Tau1, self.Tau1_nProng, self.Tau1_decayMode, self.Tau1_charge, self.Tau2, self.Tau2_nProng, self.Tau2_decayMode, self.Tau2_charge, self.Jet_b1, self.Jet_b2, self.Jet_0, self.Jet_1, self.Jet_2, self.met, self.truth_nu1, self.truth_nu2, self.mmc, self.sum_metTauTau, self.weight_mc, self.eventNumber, self.runNumber, self.n_jets
             
 class TruthTauWithObsDataLoader(DataLoader):
     def __init__(self, path, batch_size=512,rank=0,size=1, nevts=None):

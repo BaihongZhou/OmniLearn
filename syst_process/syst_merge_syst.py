@@ -37,11 +37,10 @@ name_map = {
     "Zll": 9
 }
     
-# raw_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/systematics"
-raw_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/*/ml_export"
-# raw_file_list = glob.glob(f"{raw_path}/variation.*")
-raw_file_list = glob.glob(f"{raw_path}")
-print(len(raw_file_list))
+raw_path = "/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250211_sig_ext/results/*/systematics"
+# raw_path = " /global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250125_new_fakeresults/*/ml_export"
+raw_file_list = glob.glob(f"{raw_path}/variation.*")
+# raw_file_list = glob.glob(f"{raw_path}")
 for i in range(len(raw_file_list)):
     merge_file_path = raw_file_list[i]
     merge_list = []
@@ -53,7 +52,7 @@ for i in range(len(raw_file_list)):
             print(f"Loading {file}...")
             with open(file, "rb") as f:
                 data = pickle.load(f)
-            samples_name = file.split("/")[-1].split(".")[0].replace("_recon_particles", "")
+            samples_name = file.split("/")[-1].split(".")[0].replace("_particles", "")
             data["sample"] = name_map[samples_name] * np.ones(len(data["weight"]))
             print(f"Merging {merge_file_path}...")
             if len(merge_list) == 0:

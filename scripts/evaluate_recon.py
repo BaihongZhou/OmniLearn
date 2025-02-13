@@ -21,7 +21,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
     # parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace/results/pi_pi/ml_export/", help="Folder containing input files")
-    parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace.new/results/", help="Folder containing input files")
+    parser.add_argument("--folder", default="/global/homes/b/baihong/sd/NumpyData/truth", help="Folder containing input files")
     # parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_12.09/results/pi_pi/ml_export/", help="Folder containing input files")
     # parser.add_argument("--folder", default="/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_12.05/results/pi_pi/ml_export/", help="Folder containing input files")
     # parser.add_argument("--folder", default="/pscratch/sd/b/baihong/data/NumpyData/reco/", help="Folder containing input files")
@@ -34,7 +34,6 @@ def parse_arguments():
     parser.add_argument("--talking_head", action='store_true', help="Use talking head attention")
     parser.add_argument("--layer_scale", action='store_true', help="Use layer scale in the residual connections")
     parser.add_argument("--sample", action='store_true', default=False, help="Sample from trained model")
-
     parser.add_argument("--plot_folder", default="../plots", help="Folder to save the outputs")
     return parser.parse_args()
 
@@ -59,10 +58,10 @@ def load_data_and_model(flags):
     # truth_path_list = glob.glob(truth_path + '*_particles.pkl')
     # truth_path_list = glob.glob(truth_path + 'OmniLearn_pi_pi_recon_particles.pkl')
     # truth_path_list = glob.glob(truth_path + '*/ml_export/*_recon.npz')
-    truth_path_list = glob.glob(truth_path + '**/ml_export/OmniLearn_pi_pi_recon.npz')
+    truth_path_list = glob.glob(truth_path + '/OmniLearn_pi_pi_recon.npz')
     test_loader_list = []
     for truth_path in truth_path_list:
-        test_loader_list.append(utils.RecoTauDataLoaderWithNpzForSample(truth_path,rank=hvd.rank(),size=hvd.size(),data_type='val'))
+        test_loader_list.append(utils.RecoTauDataLoaderWithNpzForSample(truth_path,rank=hvd.rank(),size=hvd.size(),EventType='val'))
         # test_loader_list.append(utils.RecoTauDataLoaderWithNpzForSample(truth_path,rank=hvd.rank(),size=hvd.size(),data_type='Lorentz'))
         # test_loader_list.append(utils.RecoTauDataLoaderWithPKLForSample(truth_path,rank=hvd.rank(),size=hvd.size(),data_type='val'))
     test = test_loader_list[0]
@@ -77,9 +76,10 @@ def load_data_and_model(flags):
                        talking_head=flags.talking_head,
                        mode=flags.mode, fine_tune=False, model_name=None, use_mean=flags.fine_tune)
     
-    # model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_Lorentz_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_boosted_8_local_layer_scale_token_baseline_generator.weights.h5"
     # model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_6_local_layer_scale_token_baseline_generator.weights.h5"
-    model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_8_local_layer_scale_token_baseline_generator.weights.h5"
+    # model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_recon_8_local_layer_scale_token_baseline_generator.weights.h5"
+    model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_base_8_local_layer_scale_token_baseline_generator.weights.h5"
     model.load_weights(model_name)
     return truth_path_list, test_loader_list, model
 
@@ -190,7 +190,7 @@ def main():
         for i in range(len(test_path_list)):
             # test_name = test_path_list[i].replace("_recon.npz", "_recon_eval_L.npz")
             # test_name = test_path_list[i].replace("_recon.npz", "_recon_eval_com.npz")
-            test_name = test_path_list[i].replace("_recon.npz", "_recon_with_obs.npz")
+            test_name = test_path_list[i].replace("_recon.npz", "_recon_baseline.npz")
             # test_name = test_path_list[i].replace(".pkl", "_eval.npz")
             if os.path.exists(test_name):
                 continue

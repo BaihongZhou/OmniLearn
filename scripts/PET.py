@@ -12,14 +12,14 @@ class PET(keras.Model):
                  num_feat,
                  num_jet,      
                  num_classes=2,
-                 num_keep = 7, #Number of features that wont be dropped
+                 num_keep = 11, #Number of features that wont be dropped
                  feature_drop = 0.1,
                  projection_dim = 128,
                  local = True, K = 2,
                  num_local = 2, 
                  num_layers = 8, num_class_layers=2,
-                 num_gen_layers = 2,
-                 num_heads = 4,drop_probability = 0.0,
+                 num_gen_layers = 3,
+                 num_heads = 8,drop_probability = 0.0,
                  simple = False, layer_scale = True,
                  layer_scale_init = 1e-5,        
                  talking_head = False,
@@ -309,9 +309,6 @@ class PET(keras.Model):
                  local, K,num_local,
                  talking_head,
                  ):
-
-
-
         
         #Randomly drop features not present in other datasets
         encoded  = RandomDrop(self.feature_drop if  'all' in self.mode else 0.0,num_skip=self.num_keep)(input_features)                        

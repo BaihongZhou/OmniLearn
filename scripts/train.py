@@ -2,7 +2,7 @@ import os
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-import horovod.tensorflow.keras as hvd
+from dummy_hvd import hvd as hvd
 import os
 import argparse
 import logging
@@ -10,13 +10,10 @@ import pickle
 # Custom local imports
 import utils
 from PET_jetnet import PET_jetnet
-from PET_regression import PET as PET_regression
 
 # Keras imports
 from tensorflow.keras.optimizers import schedules, Lion
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
-
-# Initialize Horovod
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -28,7 +25,7 @@ def parse_arguments():
     parser.add_argument("--folder", type=str, default="/pscratch/sd/b/baihong/data/", help="Folder containing input files")
     parser.add_argument("--mode", type=str, default="generator", help="Loss type to train the model")
     parser.add_argument("--batch", type=int, default=2048, help="Batch size")
-    parser.add_argument("--epoch", type=int, default=1000, help="Max epoch")
+    parser.add_argument("--epoch", type=int, default=500, help="Max epoch")
     parser.add_argument("--lr", type=float, default=1.2e-4, help="Learning rate")
     parser.add_argument("--lr_factor", type=float, default=10 , help="Factor to adjust learning rate")
     parser.add_argument("--fine_tune", action='store_true', default=False, help='Fine tune a model')
@@ -42,41 +39,8 @@ def parse_arguments():
 
 def get_data_loader(flags):
     if flags.dataset == 'pipi':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/pi_pi_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/pi_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
-    elif flags.dataset == 'epi':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/e_pi_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="epi")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/e_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="epi")
-    elif flags.dataset == 'erho':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/e_rho_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="erho")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/e_rho_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="erho")
-    elif flags.dataset == 'mupi':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/mu_pi_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="mupi")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/mu_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="mupi")
-    elif flags.dataset == 'murho':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/mu_rho_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="murho")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/mu_rho_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="murho")
-    elif flags.dataset == 'pirho':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/pi_rho_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pirho")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/pi_rho_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pirho")
-    elif flags.dataset == 'rhorho':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/rho_rho_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="rhorho")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/rho_rho_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="rhorho")
-    elif flags.dataset == 'mix':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/Recon_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="mix")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/Recon_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="mix")
-    elif flags.dataset == 'baseline':
-        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/baseline_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="baseline")
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline/baseline_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="baseline")
-    elif flags.dataset == 'bbtautau':
-        train = utils.bbtautauDataLoader(os.path.join(flags.folder,'NumpyData/', 'bbtautau/bbtautau_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="bbtautau")
-        val = utils.bbtautauDataLoader(os.path.join(flags.folder,'NumpyData/', 'bbtautau/bbtautau_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="bbtautau")
-    elif flags.dataset == 'hhttbbSM':
-        train = utils.bbtautauDataLoader(os.path.join(flags.folder,'NumpyData/', 'bbtautau/hhttbbSM_boosted.pkl_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="hhttbbSM")
-        val = utils.bbtautauDataLoader(os.path.join(flags.folder,'NumpyData/', 'bbtautau/hhttbbSM_boosted.pkl_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="hhttbbSM")
-    elif flags.dataset == 'ytautau':
-        train = utils.bbtautauDataLoader(os.path.join(flags.folder,'NumpyData/', 'bbtautau/ytautau_boosted.pkl_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="ytautau")
-        val = utils.bbtautauDataLoader(os.path.join(flags.folder,'NumpyData/', 'bbtautau/ytautau_boosted.pkl_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="ytautau")
+        train = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline_050210/pi_pi_recon_total_train.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
+        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
     return train, val
 
 def configure_optimizers(flags, train_loader,lr_factor = 1.0):
@@ -125,47 +89,30 @@ def main():
     else:
         model_name = None
 
-    if flags.dataset == 'pipi_regression':
-        model = PET_regression(num_feat=train_loader.num_feat,
-                        num_jet=train_loader.num_jet,
-                        num_classes=train_loader.num_classes,
-                        local=flags.local,
-                        num_layers=flags.num_layers,
-                        drop_probability=flags.drop_probability,
-                        simple=flags.simple, layer_scale=flags.layer_scale,
-                        talking_head=flags.talking_head,
-                        mode=flags.mode
-                        )
-    else:
-        model = PET_jetnet(num_feat=train_loader.num_feat,
-                        num_jet=train_loader.num_jet,
-                        num_classes=train_loader.num_classes,
-                        num_part=train_loader.num_part,
-                        local=flags.local,
-                        num_layers=flags.num_layers,
-                        drop_probability=flags.drop_probability,
-                        simple=flags.simple, layer_scale=flags.layer_scale,
-                        talking_head=flags.talking_head,
-                        mode=flags.mode,
-                        model_name = model_name,
-                        fine_tune=flags.fine_tune
-                        )
+    model = PET_jetnet(num_feat=train_loader.num_feat,
+                    num_jet=train_loader.num_jet,
+                    num_classes=train_loader.num_classes,
+                    num_part=train_loader.num_part,
+                    local=flags.local,
+                    num_layers=flags.num_layers,
+                    drop_probability=flags.drop_probability,
+                    simple=flags.simple, layer_scale=flags.layer_scale,
+                    talking_head=flags.talking_head,
+                    mode=flags.mode,
+                    model_name = model_name,
+                    fine_tune=flags.fine_tune
+                    )
 
     optimizer_body = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
     optimizer_head = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
     model.compile(optimizer_body, optimizer_head)
     history = LossHistory(flags.dataset)
     callbacks = [
-        hvd.callbacks.BroadcastGlobalVariablesCallback(0),
-        hvd.callbacks.MetricAverageCallback(),
         EarlyStopping(patience=45, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta = 1e-4)]
 
     checkpoint_name = utils.get_model_name(flags, flags.fine_tune)
     checkpoint_path = os.path.join(flags.folder, 'checkpoints', checkpoint_name)
-    if os.path.exists(checkpoint_path):
-        model.load_weights(checkpoint_path)
-        print("Loaded weights from ", checkpoint_path)
     
     if hvd.rank() == 0:
         print("Checkpoint name: ", checkpoint_name)

@@ -1,4 +1,4 @@
-# Official Repository for the OmniLearn paper
+# Forked Repository for the OmniLearn paper
 ![Model Architecture](./assets/PET_arch.png)
 
 This is the repository used for Quantum Entanglement measurement for $pp \rightarrow \tau \tau$ system. For citing the OmniLearn, please: 

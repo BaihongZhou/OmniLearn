@@ -2,49 +2,32 @@ import numpy as np
 import glob
 import h5py as h5
 import os
-from core import Core
 import matplotlib.pyplot as plt
 import pickle
-name_map = {
-    "pi_pi": [1, 0, 0, 0, 0, 0],
-    "pi_pi_MM": [1, 0, 0, 0, 0, 0],
-    "pi_pi_PM": [1, 0, 0, 0, 0, 0],
-    "pi_pi_MP": [1, 0, 0, 0, 0, 0],
-    "pi_pi_PP": [1, 0, 0, 0, 0, 0],
-    "pi_rho": [0, 0, 1, 0, 0, 0],
-    "lep_pi": [0, 1, 0, 0, 0, 0],
-    "lep_rho": [0, 0, 0, 1, 0, 0],
-    "QCD": [0, 0, 0, 0, 0, 1],
-    "rho_rho": [0, 0, 0, 0, 1, 0],
-    "tt": [0, 0, 0, 0, 0, 1],
-    "Wlnu": [0, 0, 0, 0, 0, 1],
-    "Wtaunu": [0, 0, 0, 0, 0, 1],
-    "Zll": [0, 0, 0, 0, 0, 1],
-}
 
 def process(file_path, save_name):
     import vector
     with open(file_path, 'rb') as f:
         data = pickle.load(f)
     jet_1 = data['jet_1'][:]
-    jet_1 = vector.array({"pt": jet_1[:,0], "eta": jet_1[:,1], "phi": jet_1[:,2], "mass": jet_1[:,3]})
+    # jet_1 = vector.array({"pt": jet_1[:,0], "eta": jet_1[:,1], "phi": jet_1[:,2], "mass": jet_1[:,3]})
     jet_2 = data['jet_2'][:]
-    jet_2 = vector.array({"pt": jet_2[:,0], "eta": jet_2[:,1], "phi": jet_2[:,2], "mass": jet_2[:,3]})
+    # jet_2 = vector.array({"pt": jet_2[:,0], "eta": jet_2[:,1], "phi": jet_2[:,2], "mass": jet_2[:,3]})
     jet_3 = data['jet_3'][:]
-    jet_3 = vector.array({"pt": jet_3[:,0], "eta": jet_3[:,1], "phi": jet_3[:,2], "mass": jet_3[:,3]})
+    # jet_3 = vector.array({"pt": jet_3[:,0], "eta": jet_3[:,1], "phi": jet_3[:,2], "mass": jet_3[:,3]})
     MET = data['MET'][:]
-    MET = vector.array({"pt": MET[:,0], "phi": MET[:,1], "eta": np.zeros(MET.shape[0]), "mass": np.zeros(MET.shape[0])})
-    EventID_temp = data['EventID'][:]
-    print("We have ", EventID_temp.shape[0], " events")
+    # MET = vector.array({"pt": MET[:,0], "phi": MET[:,1], "eta": np.zeros(MET.shape[0]), "mass": np.zeros(MET.shape[0])})
+    EventID_temp = np.array(data['EventID'][:])
+    # print("We have ", EventID_temp.shape[0], " events")
     Type_temp = np.ones((EventID_temp.shape[0], 6))
     tau_p_child1 = data['tau_p_child1'][:]
-    tau_p_child1 = vector.array({"pt": tau_p_child1[:,0], "eta": tau_p_child1[:,1], "phi": tau_p_child1[:,2], "mass": tau_p_child1[:,3]})
+    # tau_p_child1 = vector.array({"pt": tau_p_child1[:,0], "eta": tau_p_child1[:,1], "phi": tau_p_child1[:,2], "mass": tau_p_child1[:,3]})
     tau_p_child2 = data['tau_p_child2'][:]
-    tau_p_child2 = vector.array({"pt": tau_p_child2[:,0], "eta": tau_p_child2[:,1], "phi": tau_p_child2[:,2], "mass": tau_p_child2[:,3]})
+    # tau_p_child2 = vector.array({"pt": tau_p_child2[:,0], "eta": tau_p_child2[:,1], "phi": tau_p_child2[:,2], "mass": tau_p_child2[:,3]})
     tau_m_child1 = data['tau_m_child1'][:]
-    tau_m_child1 = vector.array({"pt": tau_m_child1[:,0], "eta": tau_m_child1[:,1], "phi": tau_m_child1[:,2], "mass": tau_m_child1[:,3]})
+    # tau_m_child1 = vector.array({"pt": tau_m_child1[:,0], "eta": tau_m_child1[:,1], "phi": tau_m_child1[:,2], "mass": tau_m_child1[:,3]})
     tau_m_child2 = data['tau_m_child2'][:]
-    tau_m_child2 = vector.array({"pt": tau_m_child2[:,0], "eta": tau_m_child2[:,1], "phi": tau_m_child2[:,2], "mass": tau_m_child2[:,3]})
+    # tau_m_child2 = vector.array({"pt": tau_m_child2[:,0], "eta": tau_m_child2[:,1], "phi": tau_m_child2[:,2], "mass": tau_m_child2[:,3]})
     tau_p_child1_charge = data['tau_p_child1_charge'][:]
     tau_p_child1_is_el = data['tau_p_child1_is_el'][:]
     tau_p_child1_is_mu = data['tau_p_child1_is_mu'][:]
@@ -66,9 +49,9 @@ def process(file_path, save_name):
     tau_m_child2_is_charged_pion = data['tau_m_child2_is_charged_pion'][:]
     tau_m_child2_is_neutral_part = data['tau_m_child2_is_neutral_part'][:]
     nu_p = data['truth_nu_p'][:]
-    nu_p = vector.array({"pt": nu_p[:,0], "eta": nu_p[:,1], "phi": nu_p[:,2], "mass": np.zeros(nu_p.shape[0])})
+    # nu_p = vector.array({"pt": nu_p[:,0], "eta": nu_p[:,1], "phi": nu_p[:,2], "mass": np.zeros(nu_p.shape[0])})
     nu_m = data['truth_nu_m'][:]
-    nu_m = vector.array({"pt": nu_m[:,0], "eta": nu_m[:,1], "phi": nu_m[:,2], "mass": np.zeros(nu_m.shape[0])})
+    # nu_m = vector.array({"pt": nu_m[:,0], "eta": nu_m[:,1], "phi": nu_m[:,2], "mass": np.zeros(nu_m.shape[0])})
     jet_1_temp = np.stack([jet_1.px, jet_1.py, jet_1.pz, jet_1.E, np.zeros_like(jet_1.pt), np.zeros_like(jet_1.pt), np.zeros_like(jet_1.pt), np.zeros_like(jet_1.pt), np.zeros_like(jet_1.pt)], -1) 
     jet_2_temp = np.stack([jet_2.px, jet_2.py, jet_2.pz, jet_2.E, np.zeros_like(jet_2.pt), np.zeros_like(jet_2.pt), np.zeros_like(jet_2.pt), np.zeros_like(jet_2.pt), np.zeros_like(jet_2.pt)], -1)
     jet_3_temp = np.stack([jet_3.px, jet_3.py, jet_3.pz, jet_3.E, np.zeros_like(jet_3.pt), np.zeros_like(jet_3.pt), np.zeros_like(jet_3.pt), np.zeros_like(jet_3.pt), np.zeros_like(jet_3.pt)], -1)
@@ -175,10 +158,10 @@ def main():
     data_path = '/global/cfs/cdirs/m2616/avencast/Quantum_Entanglement/workspace_20250114/results'
     save_path = '/pscratch/sd/b/baihong/data/NumpyData/baseline'
     print("Start processing the data")
-    sample_lists = ['pi_pi/ml_export/pi_pi_recon_boost.pkl']
+    sample_lists = ['pi_pi/ml_export/pi_pi_recon_particles.pkl']
     for f in sample_lists:
         file_path = data_path + '/' + f
-        file_name = file_path.split('/')[-1].replace('_boost.pkl', '_total')
+        file_name = file_path.split('/')[-1].replace('_particles.pkl', '')
         if "lep" in file_name:
             real_par = f.split('/')[0].split('_')[0]
             file_name = file_name.replace('lep', real_par)

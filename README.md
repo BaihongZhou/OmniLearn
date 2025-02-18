@@ -24,7 +24,7 @@ Our **recommendation** is to use the docker container.
 
 # Data
 
-## $pp \rightarrow \tau^+ \tau^- \rightarrow \pi^+ \bar{\nu_{\tau}} \pi \nu_{\tau}$ 
+## $pp \rightarrow \tau^+ \tau^- \rightarrow \pi^+ \bar{\nu_{\tau}} \pi^- \nu_{\tau}$ 
 
 You can copy the file in Cluster@INPAC:
 ```bash
@@ -38,7 +38,7 @@ The input contains three parts:
   
   Contains: [ $p_T, \eta ,\phi,$ E, Charge, is_electron, is_muon, is_charged_pion, is_neutral_part]
 - "MET": MET and MET_Phi information;
-- "nu": Our reconstrction target: $(\nu_1, \nu_2)$ -> Shape[-1, 6];
+- "nu": Our reconstruction target: $(\nu_1, \nu_2)$ -> Shape[-1, 6];
 
     Contains: [ $p_x^{\nu_1}, p_y^{\nu_1}, p_z^{\nu_1}, p_x^{\nu_2}, p_y^{\nu_2}, p_z^{\nu_2}$ ]
 

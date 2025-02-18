@@ -31,9 +31,8 @@ You can copy the file in Cluster@INPAC:
 cp /lustre/collider/zhoubaihong/QE_study/pptautau/pi_pi_recon_total* <your-file-path>
 ```
 ### Data Preprocess
-```
-The codes are stored in 'preprocessing/preprocess_pipi.py';
-```
+> The codes are stored in 'preprocessing/preprocess_pipi.py';
+
 The input contains three parts:
 - "X": $\tau$ visible part and small-R jets; -> Shape:[-1, 7, 9];
   

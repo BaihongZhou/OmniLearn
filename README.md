@@ -30,6 +30,20 @@ You can copy the file in Cluster@INPAC:
 ```bash
 cp /lustre/collider/zhoubaihong/QE_study/pptautau/pi_pi_recon_total* <your-file-path>
 ```
+### Data Preprocess
+```
+The codes are stored in 'preprocessing/preprocess_pipi.py';
+```
+The input contains three parts:
+- "X": $\tau$ visible part and small-R jets; -> Shape:[-1, 7, 9];
+  
+  Contains: [$p_T, \eta ,\phi, E, Charge, is_electron, is_muon, is_charged_pion, is_neutral_part$]
+- "MET": MET and MET_Phi information;
+- "nu": Our reconstrction target: $(\nu_1, \nu_2)$ -> Shape[-1, 6];
+
+    Contains: [$p_x^{\nu_1}, p_y^{\nu_1}, p_z^{\nu_1}, p_x^{\nu_2}, p_y^{\nu_2}, p_z^{\nu_2}$]
+
+
 
 # Training OmniLearn for neutrino reconstruction
 For the training run:

@@ -26,9 +26,9 @@ Our **recommendation** is to use the docker container.
 
 ## $pp \rightarrow \tau^+ \tau^- \rightarrow \pi^+ \bar{\nu_{\tau}} \pi \nu_{\tau}$ 
 
-You can find the file in Cluster@INPAC:
+You can copy the file in Cluster@INPAC:
 ```bash
-
+cp /lustre/collider/zhoubaihong/QE_study/pptautau/pi_pi_recon_total* <your-file-path>
 ```
 
 # Training OmniLearn for neutrino reconstruction

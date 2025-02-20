@@ -105,10 +105,7 @@ class DataLoader:
             pion = None
             jet = self.jet
 
-        if self.EventID is not None:
-            return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y, self.EventID, self.event_type,pion
-        else:
-            return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y
+        return X,X[:,:,1:3],self.mask.astype(np.float32),jet,self.y
 
     def make_tfdata(self):
         X = self.preprocess(self.X,self.mask).astype(np.float32)

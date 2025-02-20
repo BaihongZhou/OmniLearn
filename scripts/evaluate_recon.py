@@ -27,6 +27,7 @@ def parse_arguments():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
     parser.add_argument("--drop_probability", type=float, default=0.0, help="Stochastic Depth drop probability")
     parser.add_argument("--simple", action='store_true', help="Use simplified head model")
+    parser.add_argument("--batch", type=int, default=512, help="Batch size")
     parser.add_argument("--talking_head", action='store_true', help="Use talking head attention")
     parser.add_argument("--layer_scale", action='store_true', help="Use layer scale in the residual connections")
     parser.add_argument("--sample", action='store_true', default=False, help="Sample from trained model")

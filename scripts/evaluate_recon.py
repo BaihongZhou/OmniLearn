@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
-    parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
+    parser.add_argument("--dataset", default="pipi", help="Folder containing input files")
     parser.add_argument("--folder", default="/global/homes/b/baihong/sd/NumpyData/truth", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")

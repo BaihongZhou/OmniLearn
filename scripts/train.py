@@ -59,24 +59,6 @@ def configure_optimizers(flags, train_loader,lr_factor = 1.0):
     )
     return hvd.DistributedOptimizer(optimizer)
 
-class LossHistory(keras.callbacks.Callback):
-    def __init__(self, dataset_name):
-        super(LossHistory, self).__init__()
-        self.dataset_name = dataset_name
-        self.losses = []
-
-    def on_train_begin(self, logs={}):
-        self.losses = []
-
-    def on_epoch_end(self, epoch, logs=None):
-        print_loss = logs.get('loss')
-        val_loss = logs.get('val_loss')
-        print_loss = str(print_loss)
-        val_loss = str(val_loss)
-        with open("./logs_{}/loss.csv".format(self.dataset_name), 'a+') as f:
-            f.write(print_loss + ',' + val_loss)
-            f.write('\n')
-
 def main():
     utils.setup_gpus()
     flags = parse_arguments()
@@ -106,7 +88,6 @@ def main():
     optimizer_body = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
     optimizer_head = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
     model.compile(optimizer_body, optimizer_head)
-    history = LossHistory(flags.dataset)
     callbacks = [
         EarlyStopping(patience=45, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta = 1e-4)]
@@ -122,7 +103,6 @@ def main():
                                               save_weights_only=True,
                                               period=1)
         callbacks.append(checkpoint_callback)
-        callbacks.append(history)
         
         
     hist = model.fit(train_loader.make_tfdata(),
@@ -135,9 +115,5 @@ def main():
                      verbose=hvd.rank() == 0,
                      )
     
-    if hvd.rank() ==0:
-        with open(os.path.join(flags.folder,'histories',utils.get_model_name(flags,flags.fine_tune).replace(".weights.h5",".pkl")),"wb") as f:
-            pickle.dump(hist.history, f)
-
 if __name__ == "__main__":
     main()

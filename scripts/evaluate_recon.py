@@ -58,7 +58,7 @@ def load_data_and_model(flags):
     return test, model
 
 
-def sample_data(test, model, flags, sample_name):
+def sample_data(test, model, flags, sample_name="pipi_recon"):
     """ Sample data using the model and save to file. """
     part,point,mask,jet,met,EventID,event_type, pion = test.make_eval_data(preprocess=True)
     
@@ -151,7 +151,7 @@ def main():
     if flags.sample:
         if hvd.rank()==0:logging.info("Sampling the data with boost samples.")
         test, model = load_data_and_model(flags)
-        sample_data(test, model, flags, test_name)
+        sample_data(test, model, flags)
     else:
         if hvd.rank()==0:logging.info("Loading saved samples.")
         test = get_data_info(flags)

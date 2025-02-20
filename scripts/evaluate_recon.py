@@ -54,7 +54,7 @@ def load_data_and_model(flags):
 
     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_base_8_local_layer_scale_token_baseline_generator.weights.h5"
     model.load_weights(model_name)
-    return truth_path_list, test_loader_list, model
+    return test, model
 
 
 def sample_data(test, model, flags, sample_name):
@@ -149,15 +149,8 @@ def main():
     
     if flags.sample:
         if hvd.rank()==0:logging.info("Sampling the data with boost samples.")
-        test_path_list, test_loader_list, model = load_data_and_model(flags)
-        for i in range(len(test_path_list)):
-            test_name = test_path_list[i].replace("_recon.npz", "_recon_baseline.npz")
-            if os.path.exists(test_name):
-                continue
-            else:
-                if hvd.rank()==0:logging.info("Sampling the {}.".format(test_name))
-                test = test_loader_list[i]
-                sample_data(test, model, flags, test_name)
+        test, model = load_data_and_model(flags)
+        sample_data(test, model, flags, test_name)
     else:
         if hvd.rank()==0:logging.info("Loading saved samples.")
         test = get_data_info(flags)

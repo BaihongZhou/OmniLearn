@@ -60,7 +60,7 @@ def load_data_and_model(flags):
 
 def sample_data(test, model, flags, sample_name="pipi_recon"):
     """ Sample data using the model and save to file. """
-    part,point,mask,jet,met,EventID,event_type, pion = test.make_eval_data(preprocess=True)
+    part,point,mask,jet,met = test.make_eval_data(preprocess=True)
     
     nsplit = 50
     total_j = model.generate(nsplit,
@@ -75,9 +75,7 @@ def sample_data(test, model, flags, sample_name="pipi_recon"):
     if hvd.rank() == 0:
         dict = {
             'nu_p':total_jet[:,:,:3],
-            'nu_m':total_jet[:,:,3:],
-            'EventID':EventID,
-            'event_type':event_type,
+            'nu_m':total_jet[:,:,3:]
         }
         np.savez(sample_name, **dict)
             

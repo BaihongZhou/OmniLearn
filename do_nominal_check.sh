@@ -2,7 +2,7 @@
 # First, merge the nominal samples
 export PYTHONPATH=/pscratch/sd/b/baihong/python_libs/omni:$PYTHONPATH
 
-cd syst_process
+cd scripts
 shifter python syst_merge.py
 wait
 # After merging, produce the nominal samples

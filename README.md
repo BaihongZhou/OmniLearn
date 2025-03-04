@@ -59,3 +59,4 @@ The evaluation of the trained $pp \rightarrow \tau^+ \tau^- \rightarrow \pi^+ \b
 ```bash
 python evaluate_recon.py --layer_scale --local --sample
 ```
+For people who want to do a systematic study, you can use the *.sh scripts, only valid in **NERSC**;

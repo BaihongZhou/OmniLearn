@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
-    parser.add_argument("--dataset", default="tautotalwithNpz", help="Folder containing input files")
+    parser.add_argument("--dataset", default="pipi", help="Folder containing input files")
     parser.add_argument("--folder", default="/global/homes/b/baihong/sd/NumpyData/truth", help="Folder containing input files")
     parser.add_argument("--mode", default="generator", help="Loss type to train the model: [all/classifier/generator]")
     parser.add_argument("--fine_tune", action='store_true', help="Fine tune a model")
@@ -27,6 +27,7 @@ def parse_arguments():
     parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
     parser.add_argument("--drop_probability", type=float, default=0.0, help="Stochastic Depth drop probability")
     parser.add_argument("--simple", action='store_true', help="Use simplified head model")
+    parser.add_argument("--batch", type=int, default=512, help="Batch size")
     parser.add_argument("--talking_head", action='store_true', help="Use talking head attention")
     parser.add_argument("--layer_scale", action='store_true', help="Use layer scale in the residual connections")
     parser.add_argument("--sample", action='store_true', default=False, help="Sample from trained model")
@@ -40,7 +41,7 @@ def get_data_info(flags):
         
 def load_data_and_model(flags):
     if flags.dataset == 'pipi':
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
+        test = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
     model = PET_jetnet(num_feat=test.num_feat,
                        num_jet=test.num_jet,
                        num_classes=test.num_classes,
@@ -54,12 +55,12 @@ def load_data_and_model(flags):
 
     model_name = "/pscratch/sd/b/baihong/data/checkpoints/PET_pipi_base_8_local_layer_scale_token_baseline_generator.weights.h5"
     model.load_weights(model_name)
-    return truth_path_list, test_loader_list, model
+    return test, model
 
 
-def sample_data(test, model, flags, sample_name):
+def sample_data(test, model, flags, sample_name="pipi_recon"):
     """ Sample data using the model and save to file. """
-    part,point,mask,jet,met,EventID,event_type, pion = test.make_eval_data(preprocess=True)
+    part,point,mask,jet,met = test.make_eval_data(preprocess=True)
     
     nsplit = 50
     total_j = model.generate(nsplit,
@@ -74,9 +75,7 @@ def sample_data(test, model, flags, sample_name):
     if hvd.rank() == 0:
         dict = {
             'nu_p':total_jet[:,:,:3],
-            'nu_m':total_jet[:,:,3:],
-            'EventID':EventID,
-            'event_type':event_type,
+            'nu_m':total_jet[:,:,3:]
         }
         np.savez(sample_name, **dict)
             
@@ -149,15 +148,8 @@ def main():
     
     if flags.sample:
         if hvd.rank()==0:logging.info("Sampling the data with boost samples.")
-        test_path_list, test_loader_list, model = load_data_and_model(flags)
-        for i in range(len(test_path_list)):
-            test_name = test_path_list[i].replace("_recon.npz", "_recon_baseline.npz")
-            if os.path.exists(test_name):
-                continue
-            else:
-                if hvd.rank()==0:logging.info("Sampling the {}.".format(test_name))
-                test = test_loader_list[i]
-                sample_data(test, model, flags, test_name)
+        test, model = load_data_and_model(flags)
+        sample_data(test, model, flags)
     else:
         if hvd.rank()==0:logging.info("Loading saved samples.")
         test = get_data_info(flags)

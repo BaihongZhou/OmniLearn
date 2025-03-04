@@ -7,7 +7,7 @@ import horovod.tensorflow.keras as hvd
 import argparse
 import pickle
 from PET_jetnet import PET_jetnet
-import utils
+import utils_h as utils
 import plot_utils
 import matplotlib.pyplot as plt
 import logging

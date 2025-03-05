@@ -649,53 +649,114 @@ class RecoTauDataLoaderWithPKLForSample(DataLoader):
         # Load all the data from the npz files
         with open(self.path, 'rb') as f:
             data = pickle.load(f)
-        
-        val_num = -1 if nevts is None else nevts
-        pjet_1 = data['jet_1'][rank:nevts:size]
-        pjet_2 = data['jet_2'][rank:nevts:size]
-        pjet_3 = data['jet_3'][rank:nevts:size]
-        pMET = data['MET'][rank:nevts:size]
-        EventID = data['EventID'][rank:nevts:size]
-        samples = data['sample'][rank:nevts:size]
-        ptau_p_child1 = data['tau_p_child1'][rank:nevts:size]
-        ptau_p_child2 = data['tau_p_child2'][rank:nevts:size]
-        ptau_m_child1 = data['tau_m_child1'][rank:nevts:size]
-        ptau_m_child2 = data['tau_m_child2'][rank:nevts:size]
-        tau_p_child1_charge = data['tau_p_child1_charge'][rank:nevts:size]
-        tau_p_child1_is_el = data['tau_p_child1_is_el'][rank:nevts:size]
-        tau_p_child1_is_mu = data['tau_p_child1_is_mu'][rank:nevts:size]
-        tau_p_child1_is_charged_pion = data['tau_p_child1_is_charged_pion'][rank:nevts:size]
-        tau_p_child1_is_neutral_part = data['tau_p_child1_is_neutral_part'][rank:nevts:size]
-        tau_p_child2_charge = data['tau_p_child2_charge'][rank:nevts:size]
-        tau_p_child2_is_el = data['tau_p_child2_is_el'][rank:nevts:size]
-        tau_p_child2_is_mu = data['tau_p_child2_is_mu'][rank:nevts:size]
-        tau_p_child2_is_charged_pion = data['tau_p_child2_is_charged_pion'][rank:nevts:size]
-        tau_p_child2_is_neutral_part = data['tau_p_child2_is_neutral_part'][rank:nevts:size]
-        tau_m_child1_charge = data['tau_m_child1_charge'][rank:nevts:size]
-        tau_m_child1_is_el = data['tau_m_child1_is_el'][rank:nevts:size]
-        tau_m_child1_is_mu = data['tau_m_child1_is_mu'][rank:nevts:size]
-        tau_m_child1_is_charged_pion = data['tau_m_child1_is_charged_pion'][rank:nevts:size]
-        tau_m_child1_is_neutral_part = data['tau_m_child1_is_neutral_part'][rank:nevts:size]
-        tau_m_child2_charge = data['tau_m_child2_charge'][rank:nevts:size]
-        tau_m_child2_is_el = data['tau_m_child2_is_el'][rank:nevts:size]
-        tau_m_child2_is_mu = data['tau_m_child2_is_mu'][rank:nevts:size]
-        tau_m_child2_is_charged_pion = data['tau_m_child2_is_charged_pion'][rank:nevts:size]
-        tau_m_child2_is_neutral_part = data['tau_m_child2_is_neutral_part'][rank:nevts:size]
-        jet_1 = np.stack([pjet_1.pt, pjet_1.eta, pjet_1.phi, pjet_1.E, np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt)], -1)
-        jet_2 = np.stack([pjet_2.pt, pjet_2.eta, pjet_2.phi, pjet_2.E, np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt)], -1)
-        jet_3 = np.stack([pjet_3.pt, pjet_3.eta, pjet_3.phi, pjet_3.E, np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt)], -1)
-        MET = np.stack([pMET.pt, pMET.phi], -1)
-        tau_p_child1 = np.stack([ptau_p_child1.pt, ptau_p_child1.eta, ptau_p_child1.phi, ptau_p_child1.E, tau_p_child1_charge, tau_p_child1_is_el, tau_p_child1_is_mu, tau_p_child1_is_charged_pion, tau_p_child1_is_neutral_part], -1)
-        tau_p_child2 = np.stack([ptau_p_child2.pt, ptau_p_child2.eta, ptau_p_child2.phi, ptau_p_child2.E, tau_p_child2_charge, tau_p_child2_is_el, tau_p_child2_is_mu, tau_p_child2_is_charged_pion, tau_p_child2_is_neutral_part], -1)
-        tau_m_child1 = np.stack([ptau_m_child1.pt, ptau_m_child1.eta, ptau_m_child1.phi, ptau_m_child1.E, tau_m_child1_charge, tau_m_child1_is_el, tau_m_child1_is_mu, tau_m_child1_is_charged_pion, tau_m_child1_is_neutral_part], -1)
-        tau_m_child2 = np.stack([ptau_m_child2.pt, ptau_m_child2.eta, ptau_m_child2.phi, ptau_m_child2.E, tau_m_child2_charge, tau_m_child2_is_el, tau_m_child2_is_mu, tau_m_child2_is_charged_pion, tau_m_child2_is_neutral_part], -1)
-        del pjet_1, pjet_2, pjet_3, pMET, ptau_p_child1, ptau_p_child2, ptau_m_child1, ptau_m_child2
-         
-        self.EventID = EventID
-        self.event_type = samples
-        
-        self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1])], axis=1)
-        self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
+        if "rho" in self.samples_name:
+            val_num = -1 if nevts is None else nevts
+            pjet_1 = data['jet_1'][rank:nevts:size]
+            pjet_2 = data['jet_2'][rank:nevts:size]
+            pjet_3 = data['jet_3'][rank:nevts:size]
+            pMET = data['MET'][rank:nevts:size]
+            EventID = data['EventID'][rank:nevts:size]
+            samples = data['sample'][rank:nevts:size]
+            ptau_p_child1 = data['tau_p_child1'][rank:nevts:size]
+            ptau_p_child2 = data['tau_p_child2'][rank:nevts:size]
+            ptau_p_child3 = data['tau_p_child3'][rank:nevts:size]
+            ptau_m_child1 = data['tau_m_child1'][rank:nevts:size]
+            ptau_m_child2 = data['tau_m_child2'][rank:nevts:size]
+            ptau_m_child3 = data['tau_m_child3'][rank:nevts:size]
+            tau_p_child1_charge = data['tau_p_child1_charge'][rank:nevts:size]
+            tau_p_child1_is_el = data['tau_p_child1_is_el'][rank:nevts:size]
+            tau_p_child1_is_mu = data['tau_p_child1_is_mu'][rank:nevts:size]
+            tau_p_child1_is_charged_pion = data['tau_p_child1_is_charged_pion'][rank:nevts:size]
+            tau_p_child1_is_neutral_part = data['tau_p_child1_is_neutral_part'][rank:nevts:size]
+            tau_p_child2_charge = data['tau_p_child2_charge'][rank:nevts:size]
+            tau_p_child2_is_el = data['tau_p_child2_is_el'][rank:nevts:size]
+            tau_p_child2_is_mu = data['tau_p_child2_is_mu'][rank:nevts:size]
+            tau_p_child2_is_charged_pion = data['tau_p_child2_is_charged_pion'][rank:nevts:size]
+            tau_p_child2_is_neutral_part = data['tau_p_child2_is_neutral_part'][rank:nevts:size]
+            tau_p_child3_charge = data['tau_p_child3_charge'][rank:nevts:size]
+            tau_p_child3_is_el = data['tau_p_child3_is_el'][rank:nevts:size]
+            tau_p_child3_is_mu = data['tau_p_child3_is_mu'][rank:nevts:size]
+            tau_p_child3_is_charged_pion = data['tau_p_child3_is_charged_pion'][rank:nevts:size]
+            tau_p_child3_is_neutral_part = data['tau_p_child3_is_neutral_part'][rank:nevts:size]
+            tau_m_child1_charge = data['tau_m_child1_charge'][rank:nevts:size]
+            tau_m_child1_is_el = data['tau_m_child1_is_el'][rank:nevts:size]
+            tau_m_child1_is_mu = data['tau_m_child1_is_mu'][rank:nevts:size]
+            tau_m_child1_is_charged_pion = data['tau_m_child1_is_charged_pion'][rank:nevts:size]
+            tau_m_child1_is_neutral_part = data['tau_m_child1_is_neutral_part'][rank:nevts:size]
+            tau_m_child2_charge = data['tau_m_child2_charge'][rank:nevts:size]
+            tau_m_child2_is_el = data['tau_m_child2_is_el'][rank:nevts:size]
+            tau_m_child2_is_mu = data['tau_m_child2_is_mu'][rank:nevts:size]
+            tau_m_child2_is_charged_pion = data['tau_m_child2_is_charged_pion'][rank:nevts:size]
+            tau_m_child2_is_neutral_part = data['tau_m_child2_is_neutral_part'][rank:nevts:size]
+            tau_m_child3_charge = data['tau_m_child3_charge'][rank:nevts:size]
+            tau_m_child3_is_el = data['tau_m_child3_is_el'][rank:nevts:size]
+            tau_m_child3_is_mu = data['tau_m_child3_is_mu'][rank:nevts:size]
+            tau_m_child3_is_charged_pion = data['tau_m_child3_is_charged_pion'][rank:nevts:size]
+            tau_m_child3_is_neutral_part = data['tau_m_child3_is_neutral_part'][rank:nevts:size]
+            jet_1 = np.stack([pjet_1.pt, pjet_1.eta, pjet_1.phi, pjet_1.E, np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt)], -1)
+            jet_2 = np.stack([pjet_2.pt, pjet_2.eta, pjet_2.phi, pjet_2.E, np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt)], -1)
+            jet_3 = np.stack([pjet_3.pt, pjet_3.eta, pjet_3.phi, pjet_3.E, np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt)], -1)
+            MET = np.stack([pMET.pt, pMET.phi], -1)
+            tau_p_child1 = np.stack([ptau_p_child1.pt, ptau_p_child1.eta, ptau_p_child1.phi, ptau_p_child1.E, tau_p_child1_charge, tau_p_child1_is_el, tau_p_child1_is_mu, tau_p_child1_is_charged_pion, tau_p_child1_is_neutral_part], -1)
+            tau_p_child2 = np.stack([ptau_p_child2.pt, ptau_p_child2.eta, ptau_p_child2.phi, ptau_p_child2.E, tau_p_child2_charge, tau_p_child2_is_el, tau_p_child2_is_mu, tau_p_child2_is_charged_pion, tau_p_child2_is_neutral_part], -1)
+            tau_p_child3 = np.stack([ptau_p_child3.pt, ptau_p_child3.eta, ptau_p_child3.phi, ptau_p_child3.E, tau_p_child3_charge, tau_p_child3_is_el, tau_p_child3_is_mu, tau_p_child3_is_charged_pion, tau_p_child3_is_neutral_part], -1)
+            tau_m_child1 = np.stack([ptau_m_child1.pt, ptau_m_child1.eta, ptau_m_child1.phi, ptau_m_child1.E, tau_m_child1_charge, tau_m_child1_is_el, tau_m_child1_is_mu, tau_m_child1_is_charged_pion, tau_m_child1_is_neutral_part], -1)
+            tau_m_child2 = np.stack([ptau_m_child2.pt, ptau_m_child2.eta, ptau_m_child2.phi, ptau_m_child2.E, tau_m_child2_charge, tau_m_child2_is_el, tau_m_child2_is_mu, tau_m_child2_is_charged_pion, tau_m_child2_is_neutral_part], -1)
+            tau_m_child3 = np.stack([ptau_m_child3.pt, ptau_m_child3.eta, ptau_m_child3.phi, ptau_m_child3.E, tau_m_child3_charge, tau_m_child3_is_el, tau_m_child3_is_mu, tau_m_child3_is_charged_pion, tau_m_child3_is_neutral_part], -1)
+            del pjet_1, pjet_2, pjet_3, pMET, ptau_p_child1, ptau_p_child2, ptau_m_child1, ptau_m_child2, ptau_p_child3, ptau_m_child3
+            
+            self.EventID = EventID
+            self.event_type = samples
+            
+            self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_p_child3.reshape(tau_p_child3.shape[0], 1, tau_p_child3.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1]), tau_m_child3.reshape(tau_m_child3.shape[0], 1, tau_m_child3.shape[-1])], axis=1)
+            self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
+        else:
+            val_num = -1 if nevts is None else nevts
+            pjet_1 = data['jet_1'][rank:nevts:size]
+            pjet_2 = data['jet_2'][rank:nevts:size]
+            pjet_3 = data['jet_3'][rank:nevts:size]
+            pMET = data['MET'][rank:nevts:size]
+            EventID = data['EventID'][rank:nevts:size]
+            samples = data['sample'][rank:nevts:size]
+            ptau_p_child1 = data['tau_p_child1'][rank:nevts:size]
+            ptau_p_child2 = data['tau_p_child2'][rank:nevts:size]
+            ptau_m_child1 = data['tau_m_child1'][rank:nevts:size]
+            ptau_m_child2 = data['tau_m_child2'][rank:nevts:size]
+            tau_p_child1_charge = data['tau_p_child1_charge'][rank:nevts:size]
+            tau_p_child1_is_el = data['tau_p_child1_is_el'][rank:nevts:size]
+            tau_p_child1_is_mu = data['tau_p_child1_is_mu'][rank:nevts:size]
+            tau_p_child1_is_charged_pion = data['tau_p_child1_is_charged_pion'][rank:nevts:size]
+            tau_p_child1_is_neutral_part = data['tau_p_child1_is_neutral_part'][rank:nevts:size]
+            tau_p_child2_charge = data['tau_p_child2_charge'][rank:nevts:size]
+            tau_p_child2_is_el = data['tau_p_child2_is_el'][rank:nevts:size]
+            tau_p_child2_is_mu = data['tau_p_child2_is_mu'][rank:nevts:size]
+            tau_p_child2_is_charged_pion = data['tau_p_child2_is_charged_pion'][rank:nevts:size]
+            tau_p_child2_is_neutral_part = data['tau_p_child2_is_neutral_part'][rank:nevts:size]
+            tau_m_child1_charge = data['tau_m_child1_charge'][rank:nevts:size]
+            tau_m_child1_is_el = data['tau_m_child1_is_el'][rank:nevts:size]
+            tau_m_child1_is_mu = data['tau_m_child1_is_mu'][rank:nevts:size]
+            tau_m_child1_is_charged_pion = data['tau_m_child1_is_charged_pion'][rank:nevts:size]
+            tau_m_child1_is_neutral_part = data['tau_m_child1_is_neutral_part'][rank:nevts:size]
+            tau_m_child2_charge = data['tau_m_child2_charge'][rank:nevts:size]
+            tau_m_child2_is_el = data['tau_m_child2_is_el'][rank:nevts:size]
+            tau_m_child2_is_mu = data['tau_m_child2_is_mu'][rank:nevts:size]
+            tau_m_child2_is_charged_pion = data['tau_m_child2_is_charged_pion'][rank:nevts:size]
+            tau_m_child2_is_neutral_part = data['tau_m_child2_is_neutral_part'][rank:nevts:size]
+            jet_1 = np.stack([pjet_1.pt, pjet_1.eta, pjet_1.phi, pjet_1.E, np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt), np.zeros_like(pjet_1.pt)], -1)
+            jet_2 = np.stack([pjet_2.pt, pjet_2.eta, pjet_2.phi, pjet_2.E, np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt), np.zeros_like(pjet_2.pt)], -1)
+            jet_3 = np.stack([pjet_3.pt, pjet_3.eta, pjet_3.phi, pjet_3.E, np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt), np.zeros_like(pjet_3.pt)], -1)
+            MET = np.stack([pMET.pt, pMET.phi], -1)
+            tau_p_child1 = np.stack([ptau_p_child1.pt, ptau_p_child1.eta, ptau_p_child1.phi, ptau_p_child1.E, tau_p_child1_charge, tau_p_child1_is_el, tau_p_child1_is_mu, tau_p_child1_is_charged_pion, tau_p_child1_is_neutral_part], -1)
+            tau_p_child2 = np.stack([ptau_p_child2.pt, ptau_p_child2.eta, ptau_p_child2.phi, ptau_p_child2.E, tau_p_child2_charge, tau_p_child2_is_el, tau_p_child2_is_mu, tau_p_child2_is_charged_pion, tau_p_child2_is_neutral_part], -1)
+            tau_m_child1 = np.stack([ptau_m_child1.pt, ptau_m_child1.eta, ptau_m_child1.phi, ptau_m_child1.E, tau_m_child1_charge, tau_m_child1_is_el, tau_m_child1_is_mu, tau_m_child1_is_charged_pion, tau_m_child1_is_neutral_part], -1)
+            tau_m_child2 = np.stack([ptau_m_child2.pt, ptau_m_child2.eta, ptau_m_child2.phi, ptau_m_child2.E, tau_m_child2_charge, tau_m_child2_is_el, tau_m_child2_is_mu, tau_m_child2_is_charged_pion, tau_m_child2_is_neutral_part], -1)
+            del pjet_1, pjet_2, pjet_3, pMET, ptau_p_child1, ptau_p_child2, ptau_m_child1, ptau_m_child2
+            
+            self.EventID = EventID
+            self.event_type = samples
+            
+            self.X = np.concatenate([tau_p_child1.reshape(tau_p_child1.shape[0], 1, tau_p_child1.shape[-1]), tau_p_child2.reshape(tau_p_child2.shape[0], 1, tau_p_child2.shape[-1]), tau_m_child1.reshape(tau_m_child1.shape[0], 1, tau_m_child1.shape[-1]), tau_m_child2.reshape(tau_m_child2.shape[0], 1, tau_m_child2.shape[-1])], axis=1)
+            self.X = np.concatenate([self.X, jet_1.reshape(jet_1.shape[0], 1, jet_1.shape[-1]), jet_2.reshape(jet_2.shape[0], 1, jet_2.shape[-1]), jet_3.reshape(jet_3.shape[0], 1, jet_3.shape[-1])], axis=1)
         
         #add a one label to identify particles
         self.labels = np.ones((self.X.shape[0],self.X.shape[1],1))

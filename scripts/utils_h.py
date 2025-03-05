@@ -702,7 +702,7 @@ class RecoTauDataLoaderWithPKLForSample(DataLoader):
         if "rho" in self.samples_name:
             self.labels[:,6:] = 0
         else:
-            self.labels[:,4:] = 2
+            self.labels[:,4:] = 0
         # for padding particles, the label is 0
         self.labels[self.X[:,:,0]==0] = 0
         self.X = np.concatenate([self.X,self.labels],-1)

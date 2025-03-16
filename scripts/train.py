@@ -36,19 +36,6 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Train the PET model on JetNet datasets.")
     parser.add_argument("--config", type=str, default="config.yaml", help="Path to the configuration file")
 
-    # parser.add_argument("--mode", type=str, default="generator", help="Loss type to train the model")
-    # parser.add_argument("--batch", type=int, default=2048, help="Batch size")
-    # parser.add_argument("--epoch", type=int, default=500, help="Max epoch")
-    # parser.add_argument("--lr", type=float, default=1.2e-4, help="Learning rate")
-    # parser.add_argument("--lr_factor", type=float, default=10, help="Factor to adjust learning rate")
-    # parser.add_argument("--fine_tune", action='store_true', default=False, help='Fine tune a model')
-    # parser.add_argument("--local", action='store_true', default=True, help='Use local embedding')
-    # parser.add_argument("--num_layers", type=int, default=8, help="Number of transformer layers")
-    # parser.add_argument("--drop_probability", type=float, default=0.0, help="Drop probability")
-    # parser.add_argument("--simple", action='store_true', default=False, help='Use simplified head model')
-    # parser.add_argument("--talking_head", action='store_true', default=False, help='Use talking head attention')
-    # parser.add_argument("--layer_scale", action='store_true', default=False,
-    #                     help='Use layer scale in the residual connections')
     return parser.parse_args()
 
 

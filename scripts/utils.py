@@ -304,13 +304,13 @@ class TauReconDataLoader(DataLoader):
         self.y = in_file['MET'][rank:nevts:size]
         self.jet = in_file['nu'][rank:nevts:size]
 
-        self.labels = np.ones((self.X.shape[0], self.X.shape[1], 1))
-        self.labels[:, tau_visible_number:] = 0
-
-        # for padding particles, the label is 0
-        self.labels[self.X[:, :, 0] == 0] = 0
-        self.X = np.concatenate([self.X, self.labels], -1)
-        self.y[:, 0] = np.log(self.y[:, 0])
+        # self.labels = np.ones((self.X.shape[0], self.X.shape[1], 1))
+        # self.labels[:, tau_visible_number:] = 0
+        #
+        # # for padding particles, the label is 0
+        # self.labels[self.X[:, :, 0] == 0] = 0
+        # self.X = np.concatenate([self.X, self.labels], -1)
+        # self.y[:, 0] = np.log(self.y[:, 0])
         self.mask = self.X[:, :, 2] != 0
         self.nevts = in_file['X'].shape[0] if nevts is None else nevts
         self.num_part = self.X.shape[1]

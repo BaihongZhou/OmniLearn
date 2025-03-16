@@ -3,13 +3,14 @@ dataset: "pptautau"
 preprocess:
   raw_folder: "./RawData"
   processed_folder: &processed_folder "./NumpyData"
+  overwrite: false
   sample_list:
     - "rho_rho_recon_boost.pkl"
-    - "pi_rho_recon_boost.pkl"
+#    - "pi_rho_recon_boost.pkl"
 
 sample:
   base_folder: *processed_folder
-  tag: "pi_pi"
+  tag: "pi_pi_test"
 
   tau_visible_number: 2
   normalization:
@@ -22,7 +23,19 @@ sample:
       mean: [ 0.01682312963810866, 0.016733380409220386, 0.08293679661612122, 0.021420429070607164,-0.0006042911085853564, -0.013209993791164207 ]
       std: [ 13.975173949266443, 13.981232817525068, 38.85618917630569, 14.059869543855184, 14.097959985975313, 40.51226330089419 ]
 
+training:
+  batch_size: 1024
+  epoch: 500
+  lr: 0.00012
+  lr_factor: 10
+
 features:
+  nu:
+    kinematic: [ "px", "py", "pz" ]
+    particles:
+      - truth_nu_p
+      - truth_nu_m
+
   tau_vis:
     kinematic: [ "pt", "eta", "phi", "energy" ]
     extra: [ "charge", "is_el", "is_mu", "is_charged_pion", "is_neutral_part" ]
@@ -35,7 +48,7 @@ features:
       - tau_m_child3
     label: 1
   jet:
-    kinematic: [ "px", "py", "pz", "energy" ]
+    kinematic: [ "pt", "eta", "phi", "energy" ]
     extra: [ "charge", "is_el", "is_mu", "is_charged_pion", "is_neutral_part" ]
     particles:
       - jet_1
@@ -48,7 +61,8 @@ features:
       - MET
   extra:
     - "EventID"
-
+    - "Type"
+    - "weight"
 
 model:
   ckpt_save_path: "./Output"

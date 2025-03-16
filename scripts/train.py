@@ -52,17 +52,17 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def get_data_loader(flags):
+def get_data_loader():
     dataset = None
     if config.cfg['dataset'] == 'pptautau':
         dataset = [
             utils.TauReconDataLoader(
                 path=Path(config.cfg['sample']['base_folder']) / f"{config.cfg['sample']['tag']}_{dataset_type}.hdf5",
                 sample_norm=config.cfg['sample']['normalization'],
-                batch_size=flags.batch,
+                batch_size=config.cfg['training']['batch_size'],
                 rank=hvd.rank(),
                 size=hvd.size(),
-                nevts=4096,
+                # nevts=4096,
             )
 
             for dataset_type in ['train', 'test']
@@ -71,13 +71,14 @@ def get_data_loader(flags):
     return dataset[0], dataset[1]
 
 
-def configure_optimizers(flags, train_loader, lr_factor=1.0):
-    scale_lr = flags.lr * np.sqrt(hvd.size())
+def configure_optimizers(train_loader, lr_factor=1.0):
+    scale_lr = config.cfg['training']['lr'] * np.sqrt(hvd.size())
     lr_schedule = schedules.CosineDecay(
-        initial_learning_rate=flags.lr / lr_factor,
+        initial_learning_rate=config.cfg['training']['lr'] / lr_factor,
         warmup_target=scale_lr / lr_factor,
-        warmup_steps=3 * train_loader.nevts // flags.batch // hvd.size(),
-        decay_steps=flags.epoch * train_loader.nevts // flags.batch // hvd.size(),
+        warmup_steps=3 * train_loader.nevts // config.cfg['training']['batch_size'] // hvd.size(),
+        decay_steps=config.cfg['training']['epoch'] * train_loader.nevts // config.cfg['training'][
+            'batch_size'] // hvd.size(),
     )
     optimizer = Lion(
         learning_rate=lr_schedule,
@@ -94,7 +95,7 @@ def main():
 
     load_config(flags.config)
 
-    train_loader, val_loader = get_data_loader(flags)
+    train_loader, val_loader = get_data_loader()
 
     model_config = config.cfg['model']
     ckpt_save_path = Path(model_config.pop('ckpt_save_path'))
@@ -108,8 +109,8 @@ def main():
         **model_config
     )
 
-    optimizer_body = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
-    optimizer_head = configure_optimizers(flags, train_loader, lr_factor=flags.lr_factor if flags.fine_tune else 1)
+    optimizer_body = configure_optimizers(train_loader, lr_factor=1)
+    optimizer_head = configure_optimizers(train_loader, lr_factor=1)
     model.compile(optimizer_body, optimizer_head)
     callbacks = [
         EarlyStopping(patience=45, restore_best_weights=True),
@@ -132,9 +133,9 @@ def main():
 
     hist = model.fit(
         train_loader.make_tfdata(),
-        epochs=flags.epoch,
+        epochs=config.cfg['training']['epoch'],
         validation_data=val_loader.make_tfdata(),
-        batch_size=flags.batch,
+        batch_size=config.cfg['training']['batch_size'],
         callbacks=callbacks,
         steps_per_epoch=train_loader.steps_per_epoch,
         validation_steps=val_loader.steps_per_epoch,

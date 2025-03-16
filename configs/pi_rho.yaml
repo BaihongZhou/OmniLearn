@@ -1,0 +1,65 @@
+dataset: "pptautau"
+
+preprocess:
+  raw_folder: "./RawData"
+  processed_folder: &processed_folder "./NumpyData"
+  sample_list:
+    - "rho_rho_recon_boost.pkl"
+    - "pi_rho_recon_boost.pkl"
+
+sample:
+  base_folder: *processed_folder
+  tag: "pi_rho"
+
+  tau_visible_number: 2
+  normalization:
+    particle:
+      # pt, eta, phi, energy, charge, is_el, is_mu, is_charged_pion, is_neutral_particle
+      mean: [ 15.174936586596685, 0.0, 0.0, 41.85549317045239, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
+      std: [ 15.696616138696147, 1.0, 1.0, 92.55279442301007, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ]
+    nu:
+      # (nu1) px, py, pz, (nu2) px, py, pz
+      mean: [ -0.02391130059056275, 0.00963103174019532, 0.0887821064592522, -4.879895705211167e-05, 0.002470162695203731, -0.04313502777777081 ]
+      std: [ 13.169428059607874, 13.224751262630551, 37.22644797694016, 14.779683471066075, 14.801913665250858, 44.11978535468495 ]
+
+model:
+  ckpt_save_path: "./Output"
+
+  # automatically get from input data
+  # num_feat: 10
+  # num_jet: 6
+  # num_classes: 2
+  # num_part: 7
+
+  # the probability of dropping a feature in the input data
+  feature_drop: 0.1
+  # the dims of the hidden layer
+  projection_dim: 128
+  #Use local embedding
+  local: true
+  # number of  the neighbors
+  K: 6
+  # number of  the local features
+  num_local: 2
+  # number of  the PET layers
+  num_layers: 8
+  # number of  the classification layer
+  num_class_layers: 2
+  # number of  the generator layer
+  num_gen_layers: 3
+  # number of  the Attention heads
+  num_heads: 8
+  # Drop probability
+  drop_probability: 0.0
+  # Use simplified head model
+  simple: false
+  # Use layer scale in the residual connections
+  layer_scale: true
+  # the initial value of the layer scale
+  layer_scale_init: 0.00001
+  # Use talking head attention
+  talking_head: false
+  # Loss type to train the model
+  mode: "generator"
+  fine_tune: false
+  use_mean: false

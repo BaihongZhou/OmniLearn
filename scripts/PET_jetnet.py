@@ -53,16 +53,29 @@ class PET_jetnet(keras.Model):
         self.ema = 0.999
         self.shape = (-1, 1, 1)
 
-        self.model_part  = PET(num_feat=num_feat,
-                               num_jet=num_jet,
-                               num_classes=num_classes,
-                               local = local,
-                               num_layers = num_layers, 
-                               drop_probability = drop_probability,
-                               simple = simple, layer_scale = layer_scale,
-                               talking_head = talking_head,
-                               mode = mode,                               
-                               )
+        self.model_part = PET(
+            num_feat=num_feat,
+            num_jet=num_jet,
+            num_classes=num_classes,
+            num_keep=11,
+            local=local,
+            K=K,
+            num_layers=num_layers,
+            drop_probability=drop_probability,
+            simple=simple,
+            layer_scale=layer_scale,
+            layer_scale_init=layer_scale_init,
+            talking_head=talking_head,
+            mode=mode,
+            feature_drop=feature_drop,
+            num_local=num_local,
+            num_heads=num_heads,
+            num_class_layers=num_class_layers,
+            num_gen_layers=num_gen_layers,
+            num_diffusion=self.num_diffusion,
+            dropout=0.0,
+            class_activation=None
+        )
 
         if fine_tune:
             assert model_name is not None, "ERROR: Model name is necessary if fine tune is on"

@@ -1,0 +1,93 @@
+dataset: "pptautau"
+
+preprocess:
+  raw_folder: "./RawData"
+  processed_folder: &processed_folder "./NumpyData"
+  sample_list:
+    - "rho_rho_recon_boost.pkl"
+    - "pi_rho_recon_boost.pkl"
+
+sample:
+  base_folder: *processed_folder
+  tag: "pi_pi"
+
+  tau_visible_number: 2
+  normalization:
+    particle:
+      # pt, eta, phi, energy, charge, is_el, is_mu, is_charged_pion, is_neutral_particle
+      mean: [ 2.59163526e+01, 0.0, 0.0, 7.05392784e+01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ]
+      std: [ 17.0718089, 1.0, 1.0, 115.65273143, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ]
+    nu:
+      # (nu1) px, py, pz, (nu2) px, py, pz
+      mean: [ 0.01682312963810866, 0.016733380409220386, 0.08293679661612122, 0.021420429070607164,-0.0006042911085853564, -0.013209993791164207 ]
+      std: [ 13.975173949266443, 13.981232817525068, 38.85618917630569, 14.059869543855184, 14.097959985975313, 40.51226330089419 ]
+
+features:
+  tau_vis:
+    kinematic: [ "pt", "eta", "phi", "energy" ]
+    extra: [ "charge", "is_el", "is_mu", "is_charged_pion", "is_neutral_part" ]
+    particles:
+      - tau_p_child1
+      - tau_p_child2
+      - tau_p_child3
+      - tau_m_child1
+      - tau_m_child2
+      - tau_m_child3
+    label: 1
+  jet:
+    kinematic: [ "px", "py", "pz", "energy" ]
+    extra: [ "charge", "is_el", "is_mu", "is_charged_pion", "is_neutral_part" ]
+    particles:
+      - jet_1
+      - jet_2
+      - jet_3
+    label: 0
+  met:
+    kinematic: [ "pt", "phi" ]
+    particles:
+      - MET
+  extra:
+    - "EventID"
+
+
+model:
+  ckpt_save_path: "./Output"
+
+  # automatically get from input data
+  # num_feat: 10
+  # num_jet: 6
+  # num_classes: 2
+  # num_part: 7
+
+  # the probability of dropping a feature in the input data
+  feature_drop: 0.1
+  # the dims of the hidden layer
+  projection_dim: 128
+  #Use local embedding
+  local: true
+  # number of  the neighbors
+  K: 2
+  # number of  the local features
+  num_local: 2
+  # number of  the PET layers
+  num_layers: 8
+  # number of  the classification layer
+  num_class_layers: 2
+  # number of  the generator layer
+  num_gen_layers: 3
+  # number of  the Attention heads
+  num_heads: 8
+  # Drop probability
+  drop_probability: 0.0
+  # Use simplified head model
+  simple: false
+  # Use layer scale in the residual connections
+  layer_scale: true
+  # the initial value of the layer scale
+  layer_scale_init: 0.00001
+  # Use talking head attention
+  talking_head: false
+  # Loss type to train the model
+  mode: "generator"
+  fine_tune: false
+  use_mean: false

@@ -36,12 +36,12 @@ def parse_arguments():
 
 def get_data_info(flags):
     if flags.dataset == 'pipi':
-        val = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
+        val = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), flags.batch, hvd.rank(), hvd.size(), samples_name="pipi")
     return val
         
 def load_data_and_model(flags):
     if flags.dataset == 'pipi':
-        test = utils.TruthTauDataLoader(os.path.join(flags.folder,'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'),flags.batch,hvd.rank(),hvd.size(),samples_name="pipi")
+        test = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), flags.batch, hvd.rank(), hvd.size(), samples_name="pipi")
     model = PET_jetnet(num_feat=test.num_feat,
                        num_jet=test.num_jet,
                        num_classes=test.num_classes,

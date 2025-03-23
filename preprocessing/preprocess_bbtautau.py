@@ -22,13 +22,6 @@ def process(
         overwrite: bool = False,
         for_training: bool = True,
 ):
-    # Save function
-    # def save_hdf5(file_path, col_names, data, mode="train"):
-    #     with h5.File(file_path, "w") as f:
-    #         for name, arr in zip(col_names, data):
-    #             f.create_dataset(name, data=arr)
-    #     print(f"{mode.capitalize()} data saved to {file_path}")
-
     def save_hdf5(file_path, col_names, data, mode="train"):
         with h5.File(file_path, "w") as f:
             for name, arr in zip(col_names, data):

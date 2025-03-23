@@ -14,6 +14,7 @@ preprocess:
     overwrite: true
     raw_folder: "./RawData"
     processed_folder: *processed_folder
+    split_save: true
     sample_list:
       - "hhttbbSM_eval.pkl"
       - "ytautau_eval.pkl"
@@ -34,7 +35,7 @@ sample:
 evaluation:
   processed_folder: *processed_folder
   eval_save_path: "./Output"
-  split_save: false
+  split_save: true
   model_path: "./Output/checkpoints/PET_bbtautau_8_local_layer_scale_token_baseline_generator.weights.h5"
 
 features:

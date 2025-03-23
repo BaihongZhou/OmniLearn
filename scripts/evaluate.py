@@ -44,7 +44,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
     eval_loader = utils.TauReconDataLoader(
         path=Path(eval_config['processed_folder']) / f"{sample_config['tag']}_evaluation.hdf5",
         sample_norm=sample_config['normalization'],
-        batch_size=1024,
+        batch_size=4096,
         rank=hvd.rank(),
         size=hvd.size(),
         nevts=sample_config['n_events'] if sample_config['n_events'] > 0 else None,
@@ -76,6 +76,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
         nsplit,
         met, part, point, mask,
         use_tqdm=hvd.rank() == 0,
+        candidate=1,
     )
 
     final_neutrinos = [

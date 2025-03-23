@@ -67,7 +67,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
     return eval_loader, model
 
 
-def sample_data(eval_dataloader, model, sample_name):
+def sample_data(eval_dataloader, model, sample_name, split: bool = False):
     """ Sample data using the model and save to file. """
     part, point, mask, met, truth_nu = eval_dataloader.make_eval_data(preprocess=True)
 
@@ -87,16 +87,34 @@ def sample_data(eval_dataloader, model, sample_name):
     # final_neutrinos = hvd.allgather(final_neutrinos)
 
     if hvd.rank() == 0:
-        data_dict = {
-            'nu1': final_neutrinos[:, :, :3],
-            'nu2': final_neutrinos[:, :, 3:],
-        }
-        data_dict.update({
-            f"extra_{i}": eval_dataloader.extra[:, i]
-            for i in range(eval_dataloader.extra.shape[1])
-        })
+        if not split:
+            data_dict = {
+                'nu1': final_neutrinos[:, :, :3],
+                'nu2': final_neutrinos[:, :, 3:],
+            }
+            data_dict.update({
+                f"extra_{i}": eval_dataloader.extra[:, i]
+                for i in range(eval_dataloader.extra.shape[1])
+            })
 
-        np.savez(sample_name, **data_dict)
+            np.savez(sample_name, **data_dict)
+
+            logger.info(f"Saved {sample_name}")
+        else:
+            file_list = np.unique(eval_dataloader.raw_file)
+            for file in file_list:
+                mask = eval_dataloader.raw_file == file
+                data_dict = {
+                    'nu1': final_neutrinos[mask][:, :, :3],
+                    'nu2': final_neutrinos[mask][:, :, 3:],
+                }
+                data_dict.update({
+                    f"extra_{i}": eval_dataloader.extra[mask, i]
+                    for i in range(eval_dataloader.extra.shape[1])
+                })
+
+                np.savez(sample_name.with_name(file + ".npz"), **data_dict)
+                logger.info(f"Saved {sample_name.with_name(file + '.npz')}")
 
 
 def main():
@@ -123,7 +141,10 @@ def main():
         if hvd.rank() == 0: logging.info("Sampling start!")
 
         eval_save_path.mkdir(parents=True, exist_ok=True)
-        sample_data(eval_loader, model, eval_save_path / "merged.npz")
+        sample_data(
+            eval_loader, model, eval_save_path / "merged.npz",
+            split=config.cfg["evaluation"].get("split", False)
+        )
     else:
         logging.warning("Evaluation mode not implemented.")
 

@@ -41,7 +41,7 @@ def parse_arguments():
 
 def get_data_loader():
     dataset = None
-    if config.cfg['dataset'] == 'pptautau':
+    if config.cfg['dataset'] == 'bbtautau':
         dataset = [
             utils.TauReconDataLoader(
                 path=Path(config.cfg['sample']['base_folder']) / f"{config.cfg['sample']['tag']}_{dataset_type}.hdf5",
@@ -49,7 +49,7 @@ def get_data_loader():
                 batch_size=config.cfg['training']['batch_size'],
                 rank=hvd.rank(),
                 size=hvd.size(),
-                # nevts=4096,
+                nevts=4096, # TODO: remove this hardcoding
             )
 
             for dataset_type in ['train', 'test']

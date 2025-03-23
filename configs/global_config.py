@@ -23,6 +23,7 @@ def load_config(config_file):
 def save_config(save_path, save_tag):
     save_path = Path(save_path)  # Ensure Path object
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")  # Generate timestamp
+    timestamp = "current"
     config_filename = save_path / f"{save_tag}_{timestamp}.yaml"  # Define filename
 
     # Save config as YAML

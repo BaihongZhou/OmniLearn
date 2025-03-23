@@ -235,12 +235,14 @@ class PET_jetnet(keras.Model):
     def call(self, x):
         return self.model(x)
 
-    def generate(self, nsplit,
-                 cond,
-                 particles,
-                 points,
-                 mask,
-                 use_tqdm=False):
+    def generate(
+            self, nsplit,
+            cond,
+            particles,
+            points,
+            mask,
+            use_tqdm=False
+    ):
         jet_info = []
         jet_total = []
 
@@ -265,69 +267,20 @@ class PET_jetnet(keras.Model):
                 #                        w = 0.0,
                 #                        num_steps = self.num_steps,
                 #                        const_shape = [-1,1]).numpy()
-                jet = self.DDIMSampler(part, point, mask, cond,
-                                       [self.ema_body, self.ema_head],
-                                       data_shape=[part.shape[0], self.num_jet],
-                                       w=0.0,
-                                       num_steps=self.num_steps,
-                                       const_shape=[-1, 1]).numpy()
+                jet = self.DDIMSampler(
+                    part, point, mask, cond,
+                    [self.ema_body, self.ema_head],
+                    data_shape=[part.shape[0], self.num_jet],
+                    w=0.0,
+                    num_steps=self.num_steps,
+                    const_shape=[-1, 1]
+                ).numpy()
                 jet_candidate.append(jet)
 
             total_jets = np.concatenate(jet_candidate, 1)
             total_jets = np.array(total_jets).reshape(-1, 10, jet.shape[1])
             jet_total.append(total_jets)
         return np.concatenate(jet_total)
-
-    def select_nu(self, nu, part):
-        mean_lep = [9.53190298e+00, 0.0, 0.0, 1.12493561e+02, 0.0]
-        std_lep = [9.40143725, 1.0, 1.0, 233.26712552, 1.0]
-        mean_nu = [-1.0836015, 1.6860425, 2.312119, -0.8071776, 1.2596784, 1.8461846]
-        std_nu = [11.045118, 11.041079, 269.44342, 13.143577, 13.144216, 356.6083]
-
-        def revert_prep(x, mean, std):
-            return std * x + mean
-
-        def get_pxyz(arr):
-            pT = arr[:, 0]
-            eta = arr[:, 1]
-            phi = arr[:, 2]
-            E = arr[:, 3]
-            px = pT * np.cos(phi)
-            py = pT * np.sin(phi)
-            pz = pT * np.sinh(eta)
-            return np.stack([px, py, pz], -1)
-
-        def get_ptetaphi(arr):
-            px = arr[:, 0]
-            py = arr[:, 1]
-            pz = arr[:, 2]
-            pT = np.sqrt(px ** 2 + py ** 2)
-            eta = 0.5 * np.log(
-                (np.sqrt(px ** 2 + py ** 2 + pz ** 2) + pz) / (np.sqrt(px ** 2 + py ** 2 + pz ** 2) - pz))
-            phi = np.arctan2(py, px)
-            return np.stack([pT, eta, phi], -1)
-
-        # Use mininumum Delta mass tau selectioon;
-        lepton_0_0 = get_pxyz(revert_prep(part[:, 0], mean_lep, std_lep))[:, None]
-        lepton_0_1 = get_pxyz(revert_prep(part[:, 1], mean_lep, std_lep))[:, None]
-        lepton_1_0 = get_pxyz(revert_prep(part[:, 2], mean_lep, std_lep))[:, None]
-        lepton_1_1 = get_pxyz(revert_prep(part[:, 3], mean_lep, std_lep))[:, None]
-        lepton_0 = lepton_0_0 + lepton_0_1
-        lepton_1 = lepton_1_0 + lepton_1_1
-        new_nu = revert_prep(nu, mean_nu, std_nu)
-        new_nu_0 = new_nu[:, :, :3]
-        new_nu_1 = new_nu[:, :, 3:]
-        e_lep_0 = np.sqrt(np.sum(lepton_0 ** 2, -1, keepdims=True))
-        e_lep_1 = np.sqrt(np.sum(lepton_1 ** 2, -1, keepdims=True))
-        e_nu_0 = np.sqrt(np.sum(new_nu_0 ** 2, -1, keepdims=True))
-        e_nu_1 = np.sqrt(np.sum(new_nu_1 ** 2, -1, keepdims=True))
-        tau_0 = lepton_0 + new_nu_0
-        tau_1 = lepton_1 + new_nu_1
-        m_tau_0 = (e_lep_0 + e_nu_0) ** 2 - np.sum(tau_0 ** 2, -1, keepdims=True)
-        m_tau_1 = (e_lep_1 + e_nu_1) ** 2 - np.sum(tau_1 ** 2, -1, keepdims=True)
-        idx = np.argmin(np.abs(m_tau_0 - 1.777) + np.abs(m_tau_1 - 1.777), 1, keepdims=True)
-
-        return np.take_along_axis(nu, idx, axis=1)
 
     def logsnr_schedule_cosine(self, t, logsnr_min=-20., logsnr_max=20.):
         b = tf.math.atan(tf.exp(-0.5 * logsnr_max))

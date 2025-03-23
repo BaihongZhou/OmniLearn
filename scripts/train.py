@@ -6,12 +6,12 @@ current_file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_file_path)
 
 import numpy as np
-import tensorflow as tf
-from tensorflow import keras
-import os
+
 import argparse
 import logging
-import pickle
+import wandb
+from wandb.integration.keras import WandbCallback
+
 # Custom local imports
 import utils
 from PET_jetnet import PET_jetnet
@@ -84,6 +84,17 @@ def main():
 
     load_config(flags.config)
 
+    if hvd.rank() == 0:
+        wandb.login()
+
+        run = wandb.init(
+            project="bbtautau neutrino predcition",  # Specify your project
+            config={  # Track hyperparameters and metadata
+                **config.cfg['training'],
+                **config.cfg['model'],
+            },
+        )
+
     train_loader, val_loader = get_data_loader()
 
     model_config = config.cfg['model']
@@ -103,7 +114,12 @@ def main():
     model.compile(optimizer_body, optimizer_head)
     callbacks = [
         EarlyStopping(patience=45, restore_best_weights=True),
-        ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4)]
+        ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4),
+    ]
+
+    if hvd.rank() == 0: callbacks.append(WandbCallback(
+        save_model=False,
+    ))
 
     checkpoint_name = utils.get_model_name(config.cfg["dataset"], config.cfg["model"])
     checkpoint_path = ckpt_save_path / 'checkpoints' / checkpoint_name
@@ -120,7 +136,7 @@ def main():
         )
         callbacks.append(checkpoint_callback)
 
-    hist = model.fit(
+    model.fit(
         train_loader.make_tfdata(),
         epochs=config.cfg['training']['epoch'],
         validation_data=val_loader.make_tfdata(),

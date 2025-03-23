@@ -47,7 +47,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
         batch_size=1024,
         rank=hvd.rank(),
         size=hvd.size(),
-        nevts=10,  # TODO: remove this hardcoding
+        nevts=sample_config['n_events'] if sample_config['n_events'] > 0 else None,
     )
 
     model_config = config.cfg['model']

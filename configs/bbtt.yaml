@@ -21,6 +21,7 @@ preprocess:
 sample:
   base_folder: *processed_folder
   tag: "bbtt"
+  n_events: 10
 
   normalization:
     particle:

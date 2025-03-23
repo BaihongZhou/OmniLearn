@@ -51,7 +51,7 @@ def get_data_loader():
                 batch_size=config.cfg['training']['batch_size'],
                 rank=hvd.rank(),
                 size=hvd.size(),
-                nevts=4096, # TODO: remove this hardcoding
+                nevts=config.cfg['sample']['n_events'] if config.cfg['sample']['n_events'] > 0 else None,
             )
 
             for dataset_type in ['train', 'test']

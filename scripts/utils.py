@@ -108,7 +108,10 @@ class TauReconDataLoader(DataLoader):
         self.neutrino = in_file['nu'][rank:nevts:size]
 
         self.extra = in_file['Extra'][rank:nevts:size]
-        self.raw_file = in_file['RawFile'][rank:nevts:size]
+        if 'RawFile' in in_file:
+            self.raw_file = in_file['RawFile'][rank:nevts:size]
+        else:
+            self.raw_file = None
 
         # self.labels = np.ones((self.X.shape[0], self.X.shape[1], 1))
         #

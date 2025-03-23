@@ -67,7 +67,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
     return eval_loader, model
 
 
-def sample_data(eval_dataloader, model, sample_name, split: bool = False):
+def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: bool = False):
     """ Sample data using the model and save to file. """
     part, point, mask, met, truth_nu = eval_dataloader.make_eval_data(preprocess=True)
 
@@ -84,17 +84,20 @@ def sample_data(eval_dataloader, model, sample_name, split: bool = False):
     ]
     final_neutrinos = np.concatenate(final_neutrinos, axis=1)
 
-    # final_neutrinos = hvd.allgather(final_neutrinos)
+    extra_info = eval_dataloader.extra
+
+    final_neutrinos = hvd.allgather(final_neutrinos)
+    extra_info = hvd.allgather(extra_info)
 
     if hvd.rank() == 0:
         if not split:
             data_dict = {
-                'nu1': final_neutrinos[:, :, :3],
-                'nu2': final_neutrinos[:, :, 3:],
+                'recon_nu1': final_neutrinos[:, :, :3],
+                'recon_nu2': final_neutrinos[:, :, 3:],
             }
             data_dict.update({
-                f"extra_{i}": eval_dataloader.extra[:, i]
-                for i in range(eval_dataloader.extra.shape[1])
+                f"extra_{i}": extra_info[:, i]
+                for i in range(extra_info.shape[1])
             })
 
             np.savez(sample_name, **data_dict)
@@ -143,6 +146,12 @@ def main():
         eval_save_path.mkdir(parents=True, exist_ok=True)
         sample_data(
             eval_loader, model, eval_save_path / "merged.npz",
+            raw_particle_list=[
+                particle
+                for cat, p_cfg in config.cfg["features"].items()
+                if cat in ["tau_vis", "jet"]
+                for particle in p_cfg["particles"]
+            ],
             split=config.cfg["evaluation"].get("split", False)
         )
     else:

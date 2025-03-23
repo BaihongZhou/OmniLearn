@@ -12,4 +12,6 @@ class dummy_hvd:
         return 0
     def DistributedOptimizer(self,o):
         return o
+    def allgather(self,x):
+        return x
 hvd=dummy_hvd()

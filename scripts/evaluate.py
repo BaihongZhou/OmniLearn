@@ -17,8 +17,10 @@ import logging
 import glob
 
 #### Horovod imports
-# import horovod.tensorflow.keras as hvd
-from dummy_hvd import hvd as hvd
+try:
+    import horovod.tensorflow.keras as hvd
+except ImportError or ModuleNotFoundError:
+    from dummy_hvd import hvd as hvd
 
 from configs.global_config import load_config
 import configs.global_config as config

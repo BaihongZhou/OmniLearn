@@ -10,7 +10,13 @@ import itertools
 import pickle, copy
 from scipy.stats import norm
 import glob
-from dummy_hvd import hvd as hvd
+
+
+#### Horovod imports
+try:
+    import horovod.tensorflow.keras as hvd
+except ImportError or ModuleNotFoundError:
+    from dummy_hvd import hvd as hvd
 
 
 def setup_gpus():

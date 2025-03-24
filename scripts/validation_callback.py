@@ -38,16 +38,37 @@ def evaluate_distribution(pred_nu, truth_nu, epoch):
         for j, name in enumerate(["pt", "eta", "phi"]):
             x = pred[:, j].ravel()
             y = truth[:, j].ravel()
+
+            # Define bounded range (1.5× range of truth)
+            min_truth, max_truth = np.min(y), np.max(y)
+            truth_range = max_truth - min_truth
+            buffer = 0.25 * truth_range  # extra 0.5× range split evenly on both sides
+            low = min_truth - buffer
+            high = max_truth + buffer
+
+            # Create bins including underflow/overflow
+            n_bins = 60
+            bins = np.linspace(low, high, n_bins - 2)  # exclude 2 bins to add first/last manually
+            bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])  # add extreme edges for over/underflow
+
+            # Compute histograms
+            hist_pred, _ = np.histogram(x, bins=bins, density=True)
+            hist_truth, _ = np.histogram(y, bins=bins, density=True)
+            bin_centers = 0.5 * (bins[1:] + bins[:-1])
+
+            # Log EMD & Pearson
             results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
             results[f"{prefix}/Pearson_{name}"] = pearsonr(x, y)[0]
 
-            # Plot and log to wandb
+            # Plot
             fig, ax = plt.subplots()
-            ax.hist(x, bins=60, alpha=0.5, label='pred', density=True)
-            ax.hist(y, bins=60, alpha=0.5, label='truth', density=True)
+            ax.step(bin_centers, hist_pred, where='mid', label='pred', linewidth=1.5)
+            ax.step(bin_centers, hist_truth, where='mid', label='truth', linewidth=1.5)
+            ax.set_xlim([low, high])
             ax.set_title(f"{prefix} {name} dist @ epoch {epoch}")
             ax.legend()
-            ax.grid()
+            ax.grid(True)
+
             wandb.log({f"{prefix}/dist_{name}": wandb.Image(fig)})
             plt.close(fig)
 
@@ -71,8 +92,8 @@ def unpack_tfdata(val_dataset, max_events=10000, logger=None):
         part_list.append(x_batch['input_features'][:num_to_add].numpy())
         point_list.append(x_batch['input_points'][:num_to_add].numpy())
         mask_list.append(x_batch['input_mask'][:num_to_add].numpy())
-        met_list.append(x_batch['input_jet'][:num_to_add].numpy())
-        truth_list.append(cond_batch[:num_to_add].numpy())
+        truth_list.append(x_batch['input_jet'][:num_to_add].numpy())
+        met_list.append(cond_batch[:num_to_add].numpy())
 
         total_events += num_to_add
         if total_events >= max_events:
@@ -82,7 +103,7 @@ def unpack_tfdata(val_dataset, max_events=10000, logger=None):
     point = np.concatenate(point_list, axis=0)
     mask = np.concatenate(mask_list, axis=0)
     met = np.concatenate(met_list, axis=0)
-    truth_nu = np.concatenate(truth_list, axis=0).reshape(-1, 2, 3)
+    truth_nu = np.concatenate(truth_list, axis=0)
 
     return part, point, mask, met, truth_nu
 
@@ -119,9 +140,8 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             candidate=1,
         )
 
-        reco_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :])  # shape: (N, 6)
-        pred_nu = reco_nu.reshape(-1, 2, 3)  # shape: (N, 2, 3)
-        truth_nu = truth_nu
+        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, 2, 3) # shape: (N, 6)
+        truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, 2, 3)
 
         results = evaluate_distribution(pred_nu, truth_nu, epoch)
 

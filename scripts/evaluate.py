@@ -97,6 +97,10 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
         raise
 
     if hvd.rank() == 0:
+        logger.info(f"final neutrinos shape: {final_neutrinos.shape}")
+        logger.info(f"extra info shape: {extra_info.shape}")
+        logger.info(f"raw file shape: {raw_file.shape}")
+
         if not split:
             data_dict = {
                 'recon_nu1': final_neutrinos[:, :, :3],

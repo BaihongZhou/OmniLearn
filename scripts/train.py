@@ -97,6 +97,7 @@ def main():
         )
 
     train_loader, val_loader = get_data_loader()
+    val_dataset = val_loader.make_tfdata(delete=True)
 
     model_config = config.cfg['model']
     ckpt_save_path = Path(model_config.pop('ckpt_save_path'))
@@ -118,7 +119,17 @@ def main():
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4),
     ]
 
-    if hvd.rank() == 0: callbacks.append(WandbMetricsLogger())
+    if hvd.rank() == 0:
+        callbacks.append(WandbMetricsLogger())
+        from validation_callback import DiffusionValidationCallback
+
+        val_callback = DiffusionValidationCallback(
+            model=model,
+            val_dataset=val_dataset,
+            val_dataloader=val_loader,
+            eval_every=5,
+        )
+        callbacks.append(val_callback)
 
     checkpoint_name = utils.get_model_name(config.cfg["dataset"], config.cfg["model"])
     checkpoint_path = ckpt_save_path / 'checkpoints' / checkpoint_name
@@ -138,7 +149,7 @@ def main():
     model.fit(
         train_loader.make_tfdata(),
         epochs=config.cfg['training']['epoch'],
-        validation_data=val_loader.make_tfdata(),
+        validation_data=val_dataset,
         batch_size=config.cfg['training']['batch_size'],
         callbacks=callbacks,
         steps_per_epoch=train_loader.steps_per_epoch,

@@ -2,8 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-from scripts.syst_merge import raw_path
-
 current_file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_file_path)
 
@@ -12,7 +10,6 @@ import tensorflow as tf
 import argparse
 from PET_jetnet import PET_jetnet
 import utils
-import plot_utils
 import logging
 import glob
 
@@ -131,7 +128,6 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
 
 
 def main():
-    plot_utils.SetStyle()
     utils.setup_gpus()
     if hvd.rank() == 0:
         logging.info("Horovod and GPUs initialized successfully.")

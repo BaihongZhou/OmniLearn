@@ -167,7 +167,7 @@ class TauReconDataLoader(DataLoader):
 
         return X, X[:, :, 1:3], self.mask.astype(np.float32), self.global_cond, neutrino
 
-    def make_tfdata(self):
+    def make_tfdata(self, delete: bool=True):
         X = self.preprocess(self.X, self.mask).astype(np.float32)
         X = self.pad(X, num_pad=self.num_pad)
         neutrino = self.preprocess_neutrino(self.neutrino).astype(np.float32)
@@ -181,7 +181,8 @@ class TauReconDataLoader(DataLoader):
         })
 
         tf_global_cond = tf.data.Dataset.from_tensor_slices(self.global_cond)
-        del self.X, self.global_cond, self.mask
+        if delete:
+            del self.X, self.global_cond, self.mask
         gc.collect()
 
         return tf.data.Dataset.zip((tf_zip, tf_global_cond)).cache().shuffle(self.batch_size * 100).batch(

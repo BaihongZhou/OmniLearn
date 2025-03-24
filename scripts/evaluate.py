@@ -70,7 +70,8 @@ def load_data_and_model(eval_config, sample_config, model_config):
 def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: bool = False):
     """ Sample data using the model and save to file. """
     part, point, mask, met, truth_nu = eval_dataloader.make_eval_data(preprocess=True)
-    extra_info = eval_dataloader.extra
+    extra_info = eval_dataloader.extra_info
+    raw_file = eval_dataloader.raw_file
 
     nsplit = 50
     raw_nu_candidates = model.generate(
@@ -90,6 +91,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
         logger.info(f"[Rank {hvd.rank()}] Starting allgather with shape {final_neutrinos.shape}")
         final_neutrinos = hvd.allgather(final_neutrinos)
         extra_info = hvd.allgather(tf.constant(extra_info)).numpy()
+        raw_file = hvd.allgather(tf.constant(raw_file)).numpy()
     except Exception as e:
         logger.error(f"[Rank {hvd.rank()}] Error during allgather: {e}")
         raise
@@ -109,9 +111,9 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
 
             logger.info(f"Saved {sample_name}")
         else:
-            file_list = np.unique(eval_dataloader.raw_file)
+            file_list = np.unique(raw_file)
             for file in file_list:
-                mask = eval_dataloader.raw_file == file
+                mask = raw_file == file
                 data_dict = {
                     'nu1': final_neutrinos[mask][:, :, :3],
                     'nu2': final_neutrinos[mask][:, :, 3:],
@@ -121,7 +123,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                     for i in range(eval_dataloader.extra.shape[1])
                 })
 
-                np.savez(sample_name.with_name(file + ".npz"), **data_dict)
+                np.savez(sample_name.with_name(file.deode('utf-8') + ".npz"), **data_dict)
                 logger.info(f"Saved {sample_name.with_name(file + '.npz')}")
 
 

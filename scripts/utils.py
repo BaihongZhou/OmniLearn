@@ -92,6 +92,11 @@ class DataLoader:
         # Convert multiplicity back into integers
         return new_x
 
+def process_file_name(file_name):
+    f = file_name.decode('utf-8')
+    f = f.split('_')[:-1]
+    return '_'.join(f)
+
 
 class TauReconDataLoader(DataLoader):
     def __init__(
@@ -111,11 +116,11 @@ class TauReconDataLoader(DataLoader):
         if 'RawFile' in in_file:
             unique_file = np.unique(in_file['RawFile'][rank:nevts:size])
             self.unique_file_map = {
-                file.decode('utf-8'): idx for idx, file in enumerate(unique_file)
+                process_file_name(file): idx for idx, file in enumerate(unique_file)
             }
             # convert raw file string to unique index
             self.raw_file = np.array(
-                [self.unique_file_map[file.decode('utf-8')] for file in in_file['RawFile'][rank:nevts:size]])
+                [self.unique_file_map[process_file_name(file)] for file in in_file['RawFile'][rank:nevts:size]])
         else:
             self.raw_file = None
 
@@ -133,6 +138,7 @@ class TauReconDataLoader(DataLoader):
                     sample_weight_map.get(index_to_filename[idx], 1.0)  # default to 1.0 if missing
                     for idx in self.raw_file
                 ])
+
 
             # self.weight = event_weight * sample_weight
             self.weight = sample_weight

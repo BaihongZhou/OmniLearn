@@ -132,14 +132,14 @@ def process_data(
                     'eta': array_data[:, 1],
                     'phi': array_data[:, 2],
                     'mass': np.zeros(array_data.shape[0]),
-                }).to_ptphietamass()
+                }).to_pxpypzenergy()
             else:
                 data[key] = vector.array({
                     'pt': array_data[:, 0],
                     'eta': array_data[:, 1],
                     'phi': array_data[:, 2],
                     'mass': array_data[:, 3],
-                }).to_ptphietamass()
+                }).to_pxpypzenergy()
 
     # if sum_columns is not None:
     #     for key in sum_columns:
@@ -148,6 +148,9 @@ def process_data(
     #                 data[key] = data[col]
     #             else:
     #                 data[key] += data[col]
+
+    # data['reco_nu1'] = data['truth_nu1']
+    # data['reco_nu2'] = data['truth_nu2']
 
     data['reco_Tau1'] = data['Tau1'] + data['reco_nu1']
     data['reco_Tau2'] = data['Tau2'] + data['reco_nu2']
@@ -187,40 +190,40 @@ if __name__ == '__main__':
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
-    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc/plots')
+    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc.large_scale/plots')
     out_dir.mkdir(exist_ok=True)
 
     files = {
         'hhttbbSM': {
             'raw': ['data/RawData/hhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc/hhttbbSM_eval.npz'],
+            'ml': ['Output.nersc.large_scale/data/hhttbbSM_eval.npz'],
             'signal': True,
             'color': '#cc7c71',
         },
-        'ytautau': {
-            'raw': ['data/RawData/ytautau_eval.pkl'],
-            'ml': ['Output.nersc/ytautau_eval.npz'],
+        # 'ytautau': {
+        #     'raw': ['data/RawData/ytautau_eval.pkl'],
+        #     'ml': ['Output.nersc.large_scale/data/ytautau_eval.npz'],
+        #     'signal': False,
+        #     'color': '#7ab656',
+        # },
+        'Ztt': {
+            'raw': ['data/RawData/Ztt_eval.pkl'],
+            'ml': ['Output.nersc.large_scale/data/Ztt_eval.npz'],
             'signal': False,
-            'color': '#7ab656',
+            'color': '#925eb0',
         },
-        # 'Ztt': {
-        #     'raw': ['Ztt_eval.pkl'],
-        #     'ml': ['Ztt_recon.pkl'],
-        #     'signal': False,
-        #     'color': '#925eb0',
-        # },
-        # 'ttbar_dilep': {
-        #     'raw': ['ttbar_dilep_eval.pkl'],
-        #     'ml': ['ttbar_dilep_recon.pkl'],
-        #     'signal': False,
-        #     'color': '#7399f4',
-        # },
-        # 'VBFhhttbbSM': {
-        #     'raw': ['VBFhhttbbSM_recon.pkl'],
-        #     'ml': ['VBFhhttbbSM_eval.pkl'],
-        #     'signal': False,
-        #     'color': '#a5aeb7',
-        # },
+        'ttbar_dilep': {
+            'raw': ['data/RawData/ttbar_dilep_eval.pkl'],
+            'ml': ['Output.nersc.large_scale/data/ttbar_dilep_eval.npz'],
+            'signal': False,
+            'color': '#7399f4',
+        },
+        'VBFhhttbbSM': {
+            'raw': ['data/RawData/VBFhhttbbSM_eval.pkl'],
+            'ml': ['Output.nersc.large_scale/data/VBFhhttbbSM_eval.npz'],
+            'signal': True,
+            'color': '#a5aeb7',
+        },
     }
 
     key_columns = [
@@ -273,7 +276,8 @@ if __name__ == '__main__':
                 weight_col='weight',
                 bins=100,
                 x_range=None,
-                plot_sig_percentile=(0.5, 99.5),
+                plot_sig_percentile=(0.25, 99.75),
+                # plot_sig_percentile=None,
                 fig_size=(10, 8),
                 x_title=x_title,
                 save_path=out_dir / f'{var}_{kin}.png'
@@ -285,7 +289,8 @@ if __name__ == '__main__':
                 weight_col='weight',
                 bins=100,
                 x_range=None,
-                plot_sig_percentile=(0.5, 99.5),
+                plot_sig_percentile=(0.25, 99.75),
+                # plot_sig_percentile=None,
                 fig_size=(10, 8),
                 x_title=x_title,
                 save_path=out_dir / f'{var}_{kin}_truth.png'
@@ -297,7 +302,7 @@ if __name__ == '__main__':
                 delta_data=truth,
                 weight_col='weight',
                 bins=100,
-                x_range=(-1.0, 1),
+                x_range=(-2.0, 2.0),
                 plot_sig_percentile=None,
                 fig_size=(10, 8),
                 x_title=f'$\\Delta$ {x_title}',

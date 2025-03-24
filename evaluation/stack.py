@@ -50,7 +50,7 @@ def get_bin_edges_from_signal(
     signal_data = []
     for sample, config in data.items():
         if config.get('signal', False):
-            signal_data.append(config['var'][column])
+            signal_data.append(config['var'].to_ptphietamass()[column])
 
     if signal_data:
         signal_data_combined = np.concatenate(signal_data)
@@ -96,9 +96,10 @@ def plot_hist(
 
     for sample in data.keys():
 
-        values = data[sample]['var'][column_to_plot]
+        values = data[sample]['var'].to_ptphietamass()[column_to_plot]
         if delta_data is not None:
-            values /= (delta_data[sample]['var'][column_to_plot] + 1e-6)
+            # values /= (delta_data[sample]['var'][column_to_plot] + 1e-6)
+            values /= 1
 
         # print(f"Sample: {sample}, Num Values: {len(values)}, Sum Weights: {np.sum(data[sample][weight_col])}")
 

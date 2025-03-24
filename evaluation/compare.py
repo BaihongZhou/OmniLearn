@@ -57,22 +57,56 @@ def read_data(raw_files: list[Path], ml_files: list[Path]):
         raw_run_number = np.array(raw_data['runNumber'])
         raw_event_number = np.array(raw_data['eventNumber'])
 
-        ml_event_number = np.array(ml_data['extra_1'])
-        ml_run_number = np.array(ml_data['extra_2'])
+        ml_event_number = np.array(ml_data['extra_0'])
+        ml_run_number = np.array(ml_data['extra_1'])
 
-        if not np.all((raw_event_number == ml_event_number) and (raw_run_number == ml_run_number)):
-            raise ValueError("Event numbers and Run numbers do not match")
+        raw_pairs = list(zip(raw_run_number, raw_event_number))
+        ml_pairs = list(zip(ml_run_number, ml_event_number))
+
+        # Step 2: Build a dictionary mapping (runNumber, eventNumber) to index
+        ml_index_map = {pair: idx for idx, pair in enumerate(ml_pairs)}
+
+        # Step 3: Safely find matching indices
+        final_indices = []
+        missing_pairs = []
+
+        for pair in raw_pairs:
+            if pair in ml_index_map:
+                final_indices.append(ml_index_map[pair])
+            else:
+                missing_pairs.append(pair)
+
+        # Now you can handle the results
+        if missing_pairs:
+            print(f"Warning: {len(missing_pairs)} pairs not found in ml_data.")
+            # Optionally: print some examples
+            print("Missing example pairs:", missing_pairs[:5])
+
+            raise ValueError("Missing pairs in ml_data.")
+        else:
+            print("All pairs matched successfully.")
+
+        ml_event_number = ml_event_number[final_indices]
+        ml_run_number = ml_run_number[final_indices]
+
+        if not np.all(raw_event_number == ml_event_number) :
+            raise ValueError("Event numbers do not match")
+
+        if not np.all(raw_run_number == ml_run_number):
+            raise ValueError("Run numbers do not match")
 
         for key in raw_data:
             if key not in data:
                 data[key] = []
             data[key].append(raw_data[key])
 
-        data['reco_nu1'] = ml_data['recon_nu1']
-        data['reco_nu2'] = ml_data['recon_nu2']
+        data['reco_nu1'] = ml_data['nu1'][final_indices]
+        data['reco_nu2'] = ml_data['nu2'][final_indices]
 
     for key in data:
         data[key] = np.concatenate(data[key], axis=0)
+        if key in ['reco_nu1', 'reco_nu2'] and data[key].ndim == 2:
+            data[key] = np.expand_dims(data[key], axis=1)  # Back to (n, 1, 3)
 
     return data
 
@@ -150,41 +184,43 @@ def read_variable(files: dict, var: str, weight: str = 'weight'):
 
 
 if __name__ == '__main__':
-    base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
-    out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
+    # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
+    # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
+    base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
+    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc/plots')
     out_dir.mkdir(exist_ok=True)
 
     files = {
         'hhttbbSM': {
-            'raw': ['hhttbbSM_eval.pkl'],
-            'ml': ['hhttbbSM_recon.pkl'],
+            'raw': ['data/RawData/hhttbbSM_eval.pkl'],
+            'ml': ['Output.nersc/hhttbbSM_eval.npz'],
             'signal': True,
             'color': '#cc7c71',
         },
         'ytautau': {
-            'raw': ['ytautau_eval.pkl'],
-            'ml': ['ytautau_recon.pkl'],
+            'raw': ['data/RawData/ytautau_eval.pkl'],
+            'ml': ['Output.nersc/ytautau_eval.npz'],
             'signal': False,
             'color': '#7ab656',
         },
-        'Ztt': {
-            'raw': ['Ztt_eval.pkl'],
-            'ml': ['Ztt_recon.pkl'],
-            'signal': False,
-            'color': '#925eb0',
-        },
-        'ttbar_dilep': {
-            'raw': ['ttbar_dilep_eval.pkl'],
-            'ml': ['ttbar_dilep_recon.pkl'],
-            'signal': False,
-            'color': '#7399f4',
-        },
-        'VBFhhttbbSM': {
-            'raw': ['VBFhhttbbSM_recon.pkl'],
-            'ml': ['VBFhhttbbSM_eval.pkl'],
-            'signal': False,
-            'color': '#a5aeb7',
-        },
+        # 'Ztt': {
+        #     'raw': ['Ztt_eval.pkl'],
+        #     'ml': ['Ztt_recon.pkl'],
+        #     'signal': False,
+        #     'color': '#925eb0',
+        # },
+        # 'ttbar_dilep': {
+        #     'raw': ['ttbar_dilep_eval.pkl'],
+        #     'ml': ['ttbar_dilep_recon.pkl'],
+        #     'signal': False,
+        #     'color': '#7399f4',
+        # },
+        # 'VBFhhttbbSM': {
+        #     'raw': ['VBFhhttbbSM_recon.pkl'],
+        #     'ml': ['VBFhhttbbSM_eval.pkl'],
+        #     'signal': False,
+        #     'color': '#a5aeb7',
+        # },
     }
 
     key_columns = [

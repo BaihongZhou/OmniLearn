@@ -70,6 +70,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
 def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: bool = False):
     """ Sample data using the model and save to file. """
     part, point, mask, met, truth_nu = eval_dataloader.make_eval_data(preprocess=True)
+    extra_info = eval_dataloader.extra
 
     nsplit = 50
     raw_nu_candidates = model.generate(
@@ -85,10 +86,13 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
     ]
     final_neutrinos = np.concatenate(final_neutrinos, axis=1)
 
-    extra_info = eval_dataloader.extra
-
-    final_neutrinos = hvd.allgather(final_neutrinos)
-    extra_info = hvd.allgather(extra_info)
+    try:
+        logger.info(f"[Rank {hvd.rank()}] Starting allgather with shape {final_neutrinos.shape}")
+        final_neutrinos = hvd.allgather(final_neutrinos)
+        extra_info = hvd.allgather(tf.constant(extra_info)).numpy()
+    except Exception as e:
+        logger.error(f"[Rank {hvd.rank()}] Error during allgather: {e}")
+        raise
 
     if hvd.rank() == 0:
         if not split:

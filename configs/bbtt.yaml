@@ -33,6 +33,7 @@ sample:
       std: [ ]
 
 evaluation:
+  sample_tag: ["bbtt"]
   processed_folder: *processed_folder
   eval_save_path: "./Output"
   split_save: true
@@ -77,7 +78,7 @@ features:
 training:
   batch_size: 2048
   epoch: 500
-  lr: 0.00012
+  lr: 0.0005
   lr_factor: 10
 
 model:

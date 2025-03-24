@@ -16,6 +16,50 @@ from configs.global_config import load_config, save_config
 import configs.global_config as config
 
 
+def build_condition_vector(jets, y_met, jet_pt_threshold: float = 10.0):
+    # X: (n_events, n_particles, n_features)
+    # y_met: (n_events, 2) → [MET_pt, MET_phi]
+
+    # Extract jets assuming first 2 particles are taus
+    jet_pts = jets[..., 0]
+    jet_phis = jets[..., 2]
+
+    # Sort jets by pt in descending order
+    sorted_indices = np.argsort(-jet_pts, axis=1)  # descending
+    sorted_pts = np.take_along_axis(jet_pts, sorted_indices, axis=1)
+    sorted_phis = np.take_along_axis(jet_phis, sorted_indices, axis=1)
+
+    # Recompute observables with sorted jets
+    HT = np.sum(sorted_pts, axis=1, keepdims=True)
+    N_jets = np.sum(sorted_pts > jet_pt_threshold, axis=1, keepdims=True)
+
+    # Δϕ between MET and leading jet (after sorting)
+    met_pt, met_phi = y_met[:, 0], y_met[:, 1]
+    delta_phi = np.abs(sorted_phis[:, 0] - met_phi)
+    delta_phi = np.mod(delta_phi + np.pi, 2 * np.pi) - np.pi
+    delta_phi = np.abs(delta_phi)[:, None]
+
+    # MET cartesian
+    met_px = met_pt * np.cos(met_phi)
+    met_py = met_pt * np.sin(met_phi)
+
+    # MET significance
+    met_sig = met_pt / np.sqrt(HT[:, 0] + 1e-6)
+    met_sig = met_sig[:, None]
+
+    # Final conditioning vector
+    condition_vector = np.hstack([
+        met_px[:, None],
+        met_py[:, None],
+        HT,
+        N_jets,
+        delta_phi,
+        met_sig
+    ])
+
+    return condition_vector
+
+
 def process(
         data_path: Path, save_path: Path, save_tag: str,
         sample_lists: list[str], features: dict, train_ratio: float = 0.8,
@@ -111,6 +155,13 @@ def process(
     y = np.vstack(y)
     Extra = np.vstack(Extra)
 
+    # calculating MET-jet related variables for conditioning
+    # Extract jets from X
+    # Assuming first 2 particles = tau_vis → jets start from index 2
+    jet_start_index = len(features['tau_vis']['particles'])
+    jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
+    y = build_condition_vector(jets_X, y)
+
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt
     X[:, :, 3] = np.log1p(X[:, :, 3])  # energy
@@ -149,11 +200,11 @@ def process(
         test_data = (X[split_idx:], nu[split_idx:], y[split_idx:], Extra[split_idx:])
 
         # Save train & test data
-        save_hdf5(train_file, ["X", "nu", "MET", "Extra"], train_data, mode="train")
-        save_hdf5(test_file, ["X", "nu", "MET", "Extra"], test_data, mode="test")
+        save_hdf5(train_file, ["X", "nu", "Condition", "Extra"], train_data, mode="train")
+        save_hdf5(test_file, ["X", "nu", "Condition", "Extra"], test_data, mode="test")
     else:
         norm_dict = {}
-        save_hdf5(train_file, ["X", "nu", "MET", "Extra", "RawFile"], (X, nu, y, Extra, raw_file), mode="evaluation")
+        save_hdf5(train_file, ["X", "nu", "Condition", "Extra", "RawFile"], (X, nu, y, Extra, raw_file), mode="evaluation")
 
     return norm_dict
 

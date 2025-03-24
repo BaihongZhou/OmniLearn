@@ -105,7 +105,7 @@ class TauReconDataLoader(DataLoader):
         in_file = h5.File(self.path, 'r')
 
         self.X = in_file['X'][rank:nevts:size]
-        self.global_cond = in_file['MET'][rank:nevts:size]
+        self.global_cond = in_file['Condition'][rank:nevts:size]
         self.neutrino = in_file['nu'][rank:nevts:size]
 
         self.extra = in_file['Extra'][rank:nevts:size]

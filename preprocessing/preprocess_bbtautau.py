@@ -69,7 +69,7 @@ def process(
     def save_hdf5(file_path, col_names, data, mode="train"):
         with h5.File(file_path, "w") as f:
             for name, arr in zip(col_names, data):
-                if isinstance(arr, list):  # Check if the array is of string type
+                if name == "RawFile":  # Check if the array is of string type
                     f.create_dataset(name, data=arr, dtype=h5.string_dtype())
                 else:
                     f.create_dataset(name, data=arr)
@@ -94,6 +94,7 @@ def process(
     y = []
     Extra = []
     raw_file = []
+    weight = []
     for file_path in sample_lists:
         sample_file_path = data_path / file_path
         with open(sample_file_path, 'rb') as f:
@@ -106,6 +107,13 @@ def process(
                 if category == 'extra':
                     original_extra = np.column_stack([data[ext] for ext in attributes])
                     Extra.append(original_extra)
+                    continue
+
+                if category == 'weight':
+                    event_weight = data[attributes['event']]
+                    sample_weight = np.ones_like(event_weight) * attributes['sample'].get(sample_file_path.stem, 0)
+
+                    weight.append(np.column_stack([event_weight, sample_weight]))
                     continue
 
                 for particle in attributes.get('particles', []):
@@ -154,6 +162,7 @@ def process(
     nu = np.concatenate([np.vstack(parts) for parts in nu.values()], axis=1)
     y = np.vstack(y)
     Extra = np.vstack(Extra)
+    weight = np.vstack(weight)
 
     # calculating MET-jet related variables for conditioning
     # Extract jets from X
@@ -192,19 +201,30 @@ def process(
             }
         }
 
+        raw_file = np.array(raw_file)
+
         indices = np.random.permutation(X.shape[0])  # Shuffle indices
-        X, nu, y, Extra = (arr[indices] for arr in (X, nu, y, Extra))  # Apply shuffle
+        X, nu, y, Extra, Weight, Raw_File = (
+            arr[indices] for arr in (X, nu, y, Extra, weight, raw_file)
+        )  # Apply shuffle
 
         split_idx = int(len(X) * train_ratio)  # Compute split index
-        train_data = (X[:split_idx], nu[:split_idx], y[:split_idx], Extra[:split_idx])
-        test_data = (X[split_idx:], nu[split_idx:], y[split_idx:], Extra[split_idx:])
+        train_data = (
+        X[:split_idx], nu[:split_idx], y[:split_idx], Extra[:split_idx], Weight[:split_idx], list(Raw_File[:split_idx]))
+        test_data = (
+        X[split_idx:], nu[split_idx:], y[split_idx:], Extra[split_idx:], Weight[split_idx:], list(Raw_File[split_idx:]))
 
         # Save train & test data
-        save_hdf5(train_file, ["X", "nu", "Condition", "Extra"], train_data, mode="train")
-        save_hdf5(test_file, ["X", "nu", "Condition", "Extra"], test_data, mode="test")
+        save_hdf5(train_file, ["X", "nu", "Condition", "Extra", "Weight", "RawFile"], train_data, mode="train")
+        save_hdf5(test_file, ["X", "nu", "Condition", "Extra", "Weight", "RawFile"], test_data, mode="test")
     else:
         norm_dict = {}
-        save_hdf5(train_file, ["X", "nu", "Condition", "Extra", "RawFile"], (X, nu, y, Extra, raw_file), mode="evaluation")
+        save_hdf5(
+            train_file,
+            ["X", "nu", "Condition", "Extra", "RawFile"],
+            (X, nu, y, Extra, raw_file),
+            mode="evaluation"
+        )
 
     return norm_dict
 

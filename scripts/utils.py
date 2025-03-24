@@ -11,7 +11,6 @@ import pickle, copy
 from scipy.stats import norm
 import glob
 
-
 #### Horovod imports
 try:
     import horovod.tensorflow.keras as hvd
@@ -94,12 +93,12 @@ class DataLoader:
         return new_x
 
 
-
 class TauReconDataLoader(DataLoader):
     def __init__(
             self, path,
             sample_norm: dict,
             batch_size=512, rank=0, size=1, nevts=None,
+            sample_weight_map: dict[str, float] = None,
     ):
         super().__init__(path, batch_size, rank, size)
         in_file = h5.File(self.path, 'r')
@@ -115,16 +114,31 @@ class TauReconDataLoader(DataLoader):
                 file.decode('utf-8'): idx for idx, file in enumerate(unique_file)
             }
             # convert raw file string to unique index
-            self.raw_file = np.array([self.unique_file_map[file.decode('utf-8')] for file in in_file['RawFile'][rank:nevts:size]])
+            self.raw_file = np.array(
+                [self.unique_file_map[file.decode('utf-8')] for file in in_file['RawFile'][rank:nevts:size]])
         else:
             self.raw_file = None
 
-        # self.labels = np.ones((self.X.shape[0], self.X.shape[1], 1))
-        #
-        # # for padding particles, the label is 0
-        # self.labels[self.X[:, :, 0] == 0] = 0
-        # self.X = np.concatenate([self.X, self.labels], -1)
-        # self.y[:, 0] = np.log(self.y[:, 0])
+        if 'Weight' in in_file:
+            raw_weight = in_file['Weight'][rank:nevts:size]
+
+            event_weight = raw_weight[:, 0]
+            sample_weight = raw_weight[:, 1]
+
+            if sample_weight_map and self.raw_file is not None:
+                # Build inverse map: index -> filename
+                index_to_filename = {v: k for k, v in self.unique_file_map.items()}
+                # Assign sample weights using the map
+                sample_weight = np.array([
+                    sample_weight_map.get(index_to_filename[idx], 1.0)  # default to 1.0 if missing
+                    for idx in self.raw_file
+                ])
+
+            # self.weight = event_weight * sample_weight
+            self.weight = sample_weight
+        else:
+            self.weight = None
+
         self.mask = self.X[:, :, 2] != 0
         self.nevts = in_file['X'].shape[0] if nevts is None else nevts
         self.num_part = self.X.shape[1]
@@ -162,7 +176,8 @@ class TauReconDataLoader(DataLoader):
             'input_features': X,
             'input_points': X[:, :, 1:3],
             'input_mask': self.mask.astype(np.float32),
-            'input_jet': neutrino
+            'input_jet': neutrino,
+            'input_weight': self.weight.astype(np.float32),
         })
 
         tf_global_cond = tf.data.Dataset.from_tensor_slices(self.global_cond)

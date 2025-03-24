@@ -104,9 +104,13 @@ class PET_jetnet(keras.Model):
         output_body = self.body([x, inputs_points, inputs_mask, inputs_time])
         outputs = self.head([output_body, inputs_jet, inputs_mask, inputs_time, inputs_cond])
 
-        self.model_part = keras.Model(inputs=[inputs_features, inputs_points, inputs_mask,
-                                              inputs_jet, inputs_time, inputs_cond],
-                                      outputs=outputs)
+        self.model_part = keras.Model(
+            inputs=[
+                inputs_features, inputs_points, inputs_mask,
+                inputs_jet, inputs_time, inputs_cond
+            ],
+            outputs=outputs
+        )
 
         self.ema_body = keras.models.clone_model(self.body)
         self.ema_head = keras.models.clone_model(self.head)
@@ -181,6 +185,7 @@ class PET_jetnet(keras.Model):
     def train_step(self, inputs):
         x, y = inputs
         batch_size = tf.shape(x['input_jet'])[0]
+        weight = x['input_weight']
 
         with tf.GradientTape(persistent=True) as tape:
             t = tf.random.uniform((batch_size, 1))
@@ -189,14 +194,20 @@ class PET_jetnet(keras.Model):
             eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
             perturbed_x = alpha * x['input_jet'] + eps * sigma
 
-            v_pred = self.model_part([x['input_features'],
-                                      x['input_points'],
-                                      x['input_mask'],
-                                      perturbed_x, t, y])
+            v_pred = self.model_part([
+                x['input_features'],
+                x['input_points'],
+                x['input_mask'],
+                perturbed_x, t, y
+            ])
 
             v_jet = alpha * eps - sigma * x['input_jet']
 
-            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
+            if weight is not None:
+                loss = tf.reduce_mean(tf.square(v_pred - v_jet))
+                loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
+            else:
+                loss = tf.reduce_mean(tf.square(v_pred - v_jet))
 
         self.body_optimizer.minimize(loss, self.body.trainable_variables, tape=tape)
         self.optimizer.minimize(loss, self.head.trainable_variables, tape=tape)

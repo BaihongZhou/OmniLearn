@@ -10,7 +10,7 @@ import numpy as np
 import argparse
 import logging
 import wandb
-from wandb.integration.keras import WandbCallback
+from wandb.integration.keras import WandbMetricsLogger
 
 # Custom local imports
 import utils
@@ -52,6 +52,7 @@ def get_data_loader():
                 rank=hvd.rank(),
                 size=hvd.size(),
                 nevts=config.cfg['sample']['n_events'] if config.cfg['sample']['n_events'] > 0 else None,
+                sample_weight_map=config.cfg['features']['weight']['sample'],
             )
 
             for dataset_type in ['train', 'test']
@@ -117,9 +118,7 @@ def main():
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4),
     ]
 
-    if hvd.rank() == 0: callbacks.append(WandbCallback(
-        save_model=False,
-    ))
+    if hvd.rank() == 0: callbacks.append(WandbMetricsLogger())
 
     checkpoint_name = utils.get_model_name(config.cfg["dataset"], config.cfg["model"])
     checkpoint_path = ckpt_save_path / 'checkpoints' / checkpoint_name

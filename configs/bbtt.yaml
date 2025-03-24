@@ -33,7 +33,7 @@ sample:
       std: [ ]
 
 evaluation:
-  sample_tag: ["bbtt"]
+  sample_tag: [ "bbtt" ]
   processed_folder: *processed_folder
   eval_save_path: "./Output"
   split_save: true
@@ -69,6 +69,14 @@ features:
     kinematic: [ "pt", "phi" ]
     particles:
       - met
+  weight:
+    event: "weight_mc"
+    sample:
+      hhttbbSM_eval: 0.1
+      ytautau_eval: 1.0
+      Ztt_eval: 0.1
+      ttbar_dilep_eval: 0.0
+      VBFhhttbbSM_eval: 0.0
   extra:
     - "eventNumber" # 1
     - "runNumber" # 1

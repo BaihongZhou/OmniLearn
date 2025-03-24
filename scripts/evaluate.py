@@ -115,9 +115,9 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
 
             logger.info(f"Saved {sample_name}")
         else:
-            file_list = np.unique(raw_file)
+            file_list = eval_dataloader.unique_file_map
             for file in file_list:
-                mask = raw_file == file
+                mask = raw_file == file_list[file]
                 data_dict = {
                     'nu1': final_neutrinos[mask][:, :, :3],
                     'nu2': final_neutrinos[mask][:, :, 3:],
@@ -126,8 +126,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                     f"extra_{i}": eval_dataloader.extra[mask, i]
                     for i in range(eval_dataloader.extra.shape[1])
                 })
-
-                np.savez(sample_name.with_name(file.deode('utf-8') + ".npz"), **data_dict)
+                np.savez(sample_name.with_name(file + ".npz"), **data_dict)
                 logger.info(f"Saved {sample_name.with_name(file + '.npz')}")
 
 

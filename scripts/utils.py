@@ -94,6 +94,7 @@ class DataLoader:
         return new_x
 
 
+
 class TauReconDataLoader(DataLoader):
     def __init__(
             self, path,
@@ -109,7 +110,12 @@ class TauReconDataLoader(DataLoader):
 
         self.extra = in_file['Extra'][rank:nevts:size]
         if 'RawFile' in in_file:
-            self.raw_file = in_file['RawFile'][rank:nevts:size]
+            unique_file = np.unique(in_file['RawFile'][rank:nevts:size])
+            self.unique_file_map = {
+                file.decode('utf-8'): idx for idx, file in enumerate(unique_file)
+            }
+            # convert raw file string to unique index
+            self.raw_file = np.array([self.unique_file_map[file] for file in in_file['RawFile'][rank:nevts:size]])
         else:
             self.raw_file = None
 

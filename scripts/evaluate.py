@@ -157,7 +157,7 @@ def main():
                 if cat in ["tau_vis", "jet"]
                 for particle in p_cfg["particles"]
             ],
-            split=config.cfg["evaluation"].get("split", False)
+            split=config.cfg["evaluation"].get("split_save", False)
         )
     else:
         logging.warning("Evaluation mode not implemented.")

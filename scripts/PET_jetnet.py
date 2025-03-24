@@ -38,7 +38,8 @@ class PET_jetnet(keras.Model):
             mode='generator',
             fine_tune=False,
             model_name=None,
-            use_mean=False
+            use_mean=False,
+            dropout=0.0,
     ):
         super(PET_jetnet, self).__init__()
 
@@ -73,7 +74,7 @@ class PET_jetnet(keras.Model):
             num_class_layers=num_class_layers,
             num_gen_layers=num_gen_layers,
             num_diffusion=self.num_diffusion,
-            dropout=0.0,
+            dropout=dropout,
             class_activation=None
         )
 

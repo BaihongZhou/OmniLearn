@@ -116,8 +116,10 @@ model:
   num_gen_layers: 3
   # number of  the Attention heads
   num_heads: 8
-  # Drop probability
+  # Drop feature probability
   drop_probability: 0.0
+  # Dropout rate
+  dropout: 0.1
   # Use simplified head model
   simple: false
   # Use layer scale in the residual connections

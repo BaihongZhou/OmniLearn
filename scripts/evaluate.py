@@ -70,7 +70,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
 def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: bool = False):
     """ Sample data using the model and save to file. """
     part, point, mask, met, truth_nu = eval_dataloader.make_eval_data(preprocess=True)
-    extra_info = eval_dataloader.extra_info
+    extra_info = eval_dataloader.extra
     raw_file = eval_dataloader.raw_file
 
     nsplit = 50

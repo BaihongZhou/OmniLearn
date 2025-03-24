@@ -123,8 +123,8 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                     'nu2': final_neutrinos[mask][:, :, 3:],
                 }
                 data_dict.update({
-                    f"extra_{i}": eval_dataloader.extra[mask, i]
-                    for i in range(eval_dataloader.extra.shape[1])
+                    f"extra_{i}": extra_info[mask, i]
+                    for i in range(extra_info.shape[1])
                 })
                 np.savez(sample_name.with_name(file + ".npz"), **data_dict)
                 logger.info(f"Saved {sample_name.with_name(file + '.npz')}")

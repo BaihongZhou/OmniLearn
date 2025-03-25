@@ -15,6 +15,7 @@ from wandb.integration.keras import WandbMetricsLogger
 # Custom local imports
 import utils
 from PET_jetnet import PET_jetnet
+from validation_callback import DiffusionValidationCallback
 
 # Keras imports
 from tensorflow.keras.optimizers import schedules, Lion
@@ -121,15 +122,15 @@ def main():
 
     if hvd.rank() == 0:
         callbacks.append(WandbMetricsLogger())
-        from validation_callback import DiffusionValidationCallback
 
-        val_callback = DiffusionValidationCallback(
-            model=model,
-            val_dataset=val_dataset,
-            val_dataloader=val_loader,
-            eval_every=5,
-        )
-        callbacks.append(val_callback)
+    val_callback = DiffusionValidationCallback(
+        model=model,
+        val_dataset=val_dataset,
+        val_dataloader=val_loader,
+        eval_every=5,
+        extra_list_name=[]
+    )
+    callbacks.append(val_callback)
 
     checkpoint_name = utils.get_model_name(config.cfg["dataset"], config.cfg["model"])
     checkpoint_path = ckpt_save_path / 'checkpoints' / checkpoint_name

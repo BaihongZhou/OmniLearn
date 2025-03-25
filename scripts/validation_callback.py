@@ -2,9 +2,16 @@ import tensorflow as tf
 import numpy as np
 import wandb
 import logging
+import vector
 import matplotlib.pyplot as plt
 from scipy.stats import wasserstein_distance, pearsonr
 from scipy.spatial.distance import cdist
+
+#### Horovod imports
+try:
+    import horovod.tensorflow.keras as hvd
+except ImportError or ModuleNotFoundError:
+    from dummy_hvd import hvd as hvd
 
 
 def compute_mmd_rbf(X, Y, gamma=1.0):
@@ -47,7 +54,7 @@ def evaluate_distribution(pred_nu, truth_nu, epoch):
             high = max_truth + buffer
 
             # Create bins including underflow/overflow
-            n_bins = 60
+            n_bins = 51
             bins = np.linspace(low, high, n_bins - 2)  # exclude 2 bins to add first/last manually
             bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])  # add extreme edges for over/underflow
 
@@ -73,6 +80,46 @@ def evaluate_distribution(pred_nu, truth_nu, epoch):
             plt.close(fig)
 
     return results
+
+
+def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw_file_label_map=None):
+    components = ["pt", "eta", "phi", "mass"]
+    process_ids = np.unique(raw_file) if raw_file is not None else [None]
+
+    for proc_id in process_ids:
+        if raw_file is not None:
+            mask = (raw_file == proc_id)
+            pred = pred_vec[mask]
+            truth = truth_vec[mask]
+            label = raw_file_label_map.get(proc_id,
+                                           f"process_{proc_id}") if raw_file_label_map else f"process_{proc_id}"
+            suffix = f"_{label}"
+        else:
+            pred = pred_vec
+            truth = truth_vec
+            suffix = ""
+
+        for k in components:
+            x_pred = getattr(pred, k)
+            x_truth = getattr(truth, k)
+
+            min_val, max_val = np.min(x_truth), np.max(x_truth)
+            span = max_val - min_val
+            low, high = min_val - 0.25 * span, max_val + 0.25 * span
+
+            bins = np.linspace(low, high, 51)
+            hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
+            hist_truth, _ = np.histogram(x_truth, bins=bins, density=True)
+            bin_centers = 0.5 * (bins[1:] + bins[:-1])
+
+            fig, ax = plt.subplots()
+            ax.step(bin_centers, hist_pred, where='mid', label='pred', linewidth=1.5)
+            ax.step(bin_centers, hist_truth, where='mid', label='truth', linewidth=1.5, linestyle='--')
+            ax.set_title(f"{name} {k}{suffix} @ epoch {epoch}")
+            ax.grid(True)
+            ax.legend()
+            wandb.log({f"{name}/dist_{k}{suffix}": wandb.Image(fig)})
+            plt.close(fig)
 
 
 def unpack_tfdata(val_dataset, max_events=10000, logger=None):
@@ -109,7 +156,10 @@ def unpack_tfdata(val_dataset, max_events=10000, logger=None):
 
 
 class DiffusionValidationCallback(tf.keras.callbacks.Callback):
-    def __init__(self, model, val_dataset, val_dataloader, eval_every=5, logger_name="val_logger"):
+    def __init__(
+            self, model, val_dataset, val_dataloader, eval_every=5, logger_name="val_logger",
+            extra_list_name=None
+    ):
         super().__init__()
         self.model = model
         self.val_dataset = val_dataset
@@ -127,7 +177,13 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         if not self.is_main or (epoch % self.eval_every != 0):
             return
 
-        part, point, mask, cond, truth_nu = unpack_tfdata(val_dataset=self.val_dataset, logger=self.logger)
+        max_events = 10000
+
+        part, point, mask, cond, truth_nu = unpack_tfdata(
+            val_dataset=self.val_dataset, logger=self.logger, max_events=max_events
+        )
+        extra = self.val_dataloader.extra[:max_events]
+        raw_file = self.val_dataloader.raw_file[:max_events]
 
         self.logger.info(f"[EvalCallback] Sampling at epoch {epoch}")
         gen_nu = self.model.generate(
@@ -140,10 +196,70 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             candidate=1,
         )
 
-        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, 2, 3) # shape: (N, 6)
+        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, 2, 3)  # shape: (N, 6)
         truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, 2, 3)
 
-        results = evaluate_distribution(pred_nu, truth_nu, epoch)
+        # Convert vector arrays to plain numpy before allgather
+        tau1_array = np.stack([extra[:, 2], extra[:, 3], extra[:, 4], extra[:, 5]], axis=1)
+        tau2_array = np.stack([extra[:, 6], extra[:, 7], extra[:, 8], extra[:, 9]], axis=1)
+        truth_tautau_array = np.stack([extra[:, 10], extra[:, 11], extra[:, 12], extra[:, 13]], axis=1)
 
-        # Log everything to Wandb
-        wandb.log(results)
+        # Gather predicted and truth neutrinos + taus
+        pred_nu = hvd.allgather(tf.convert_to_tensor(pred_nu)).numpy()
+        truth_nu = hvd.allgather(tf.convert_to_tensor(truth_nu)).numpy()
+        tau1_array = hvd.allgather(tf.convert_to_tensor(tau1_array)).numpy()
+        tau2_array = hvd.allgather(tf.convert_to_tensor(tau2_array)).numpy()
+        truth_tautau_array = hvd.allgather(tf.convert_to_tensor(truth_tautau_array)).numpy()
+        raw_file = hvd.allgather(tf.convert_to_tensor(raw_file)).numpy()
+
+        tau1 = vector.arr({
+            "pt": tau1_array[:, 0],
+            "eta": tau1_array[:, 1],
+            "phi": tau1_array[:, 2],
+            "mass": tau1_array[:, 3],
+        })
+        tau2 = vector.arr({
+            "pt": tau2_array[:, 0],
+            "eta": tau2_array[:, 1],
+            "phi": tau2_array[:, 2],
+            "mass": tau2_array[:, 3],
+        })
+        truth_tautau = vector.arr({
+            "pt": truth_tautau_array[:, 0],
+            "eta": truth_tautau_array[:, 1],
+            "phi": truth_tautau_array[:, 2],
+            "mass": truth_tautau_array[:, 3],
+        })
+
+        nu1 = vector.arr({
+            "pt": np.expm1(pred_nu[:, 0, 0]),
+            "eta": pred_nu[:, 0, 1],
+            "phi": pred_nu[:, 0, 2],
+            "mass": np.zeros_like(pred_nu[:, 0, 0]),
+        })
+        nu2 = vector.arr({
+            "pt": np.expm1(pred_nu[:, 1, 0]),
+            "eta": pred_nu[:, 1, 1],
+            "phi": pred_nu[:, 1, 2],
+            "mass": np.zeros_like(pred_nu[:, 1, 0]),
+        })
+
+        tau1_full = tau1 + nu1
+        tau2_full = tau2 + nu2
+        tautau_pred = tau1_full + tau2_full
+
+        if hvd.rank() == 0:
+            self.logger.info(f"[EvalCallback] Total events: {len(tautau_pred.pt)}")
+
+            unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
+            self.logger.info(f"[EvalCallback] Unique files: {len(unique_file_map)}")
+
+            results = evaluate_distribution(pred_nu, truth_nu, epoch)
+            log_vector_distribution(
+                tautau_pred, truth_tautau,
+                name="tautau", epoch=epoch,
+                raw_file=raw_file, raw_file_label_map=unique_file_map
+            )
+
+            # Log everything to Wandb
+            wandb.log(results)

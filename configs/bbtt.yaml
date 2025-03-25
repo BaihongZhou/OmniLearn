@@ -22,7 +22,7 @@ preprocess:
 sample:
   base_folder: *processed_folder
   tag: "bbtt"
-  n_events: 10
+  n_events: 100
 
   normalization:
     particle:
@@ -80,9 +80,9 @@ features:
   extra:
     - "eventNumber" # 1
     - "runNumber" # 1
-    - "weight_mc" # 1
-    - "mmc" # 4
-
+    - "Tau1" # pt, eta, phi, mass
+    - "Tau2" # pt, eta, phi, mass
+    - "truth_TauTau" # pt, eta, phi, mass
 training:
   batch_size: 2048
   epoch: 500

@@ -30,7 +30,7 @@ def compute_mmd_rbf(X, Y, gamma=1.0):
     return np.mean(XX) + np.mean(YY) - 2 * np.mean(XY)
 
 
-def evaluate_distribution(pred_nu, truth_nu, epoch):
+def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
     results = {}
 
     for i in range(2):  # for nu1 and nu2
@@ -79,10 +79,13 @@ def evaluate_distribution(pred_nu, truth_nu, epoch):
             wandb.log({f"{prefix}/dist_{name}": wandb.Image(fig)})
             plt.close(fig)
 
+            if logger:
+                logger.info(f"[EvalCallback] --> Saved {prefix} {name} distribution plot")
+
     return results
 
 
-def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw_file_label_map=None):
+def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw_file_label_map=None, logger=None):
     components = ["pt", "eta", "phi", "mass"]
     process_ids = np.unique(raw_file) if raw_file is not None else [None]
 
@@ -120,6 +123,9 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
             ax.legend()
             wandb.log({f"{name}/dist_{k}{suffix}": wandb.Image(fig)})
             plt.close(fig)
+
+            if logger:
+                logger.info(f"[EvalCallback] --> Saved {name} {k}{suffix} distribution plot")
 
 
 def unpack_tfdata(val_dataset, max_events=10000, logger=None):
@@ -248,12 +254,15 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
-            results = evaluate_distribution(pred_nu, truth_nu, epoch)
+            results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger)
             log_vector_distribution(
                 tautau_pred, truth_tautau,
                 name="tautau", epoch=epoch,
-                raw_file=raw_file, raw_file_label_map=unique_file_map
+                raw_file=raw_file, raw_file_label_map=unique_file_map,
+                logger=self.logger,
             )
 
             # Log everything to Wandb
             wandb.log(results)
+
+        _ = hvd.allreduce(tf.constant(0.0))

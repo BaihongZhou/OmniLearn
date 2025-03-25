@@ -13,7 +13,7 @@ from tensorflow.keras.optimizers.schedules import PolynomialDecay
 
 
 class ProcessDiscriminator(keras.Model):
-    def __init__(self, input_dim, num_processes=3, hidden_units=128):
+    def __init__(self, input_dim, num_processes=3, hidden_units=64):
         super().__init__()
         self.net = keras.Sequential([
             layers.Input(shape=(input_dim,)),

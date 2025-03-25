@@ -179,7 +179,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         extra = self.val_dataloader.extra[:max_events]
         raw_file = self.val_dataloader.raw_file[:max_events]
 
-        self.logger.info(f"[EvalCallback] Sampling at epoch {epoch}")
+        self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Sampling at epoch {epoch}")
         gen_nu = self.model.generate(
             nsplit=50,
             cond=cond,
@@ -243,10 +243,10 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         tautau_pred = tau1_full + tau2_full
 
         if hvd.rank() == 0:
-            self.logger.info(f"[EvalCallback] Total events: {len(tautau_pred.pt)}")
+            self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Total events: {len(tautau_pred.pt)}")
 
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
-            self.logger.info(f"[EvalCallback] Unique files: {len(unique_file_map)}")
+            self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
             results = evaluate_distribution(pred_nu, truth_nu, epoch)
             log_vector_distribution(

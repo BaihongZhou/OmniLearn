@@ -167,14 +167,8 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         self.eval_every = eval_every
         self.logger = logging.getLogger(logger_name)
 
-        try:
-            import horovod.tensorflow.keras as hvd
-            self.is_main = hvd.rank() == 0
-        except ImportError:
-            self.is_main = True
-
     def on_epoch_end(self, epoch, logs=None):
-        if not self.is_main or (epoch % self.eval_every != 0):
+        if epoch % self.eval_every != 0:
             return
 
         max_events = 10000

@@ -118,19 +118,17 @@ def main():
     callbacks = [
         EarlyStopping(patience=45, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4),
+        DiffusionValidationCallback(
+            model=model,
+            val_dataset=val_dataset,
+            val_dataloader=val_loader,
+            eval_every=5,
+            extra_list_name=[]
+        )
     ]
 
     if hvd.rank() == 0:
         callbacks.append(WandbMetricsLogger())
-
-    val_callback = DiffusionValidationCallback(
-        model=model,
-        val_dataset=val_dataset,
-        val_dataloader=val_loader,
-        eval_every=5,
-        extra_list_name=[]
-    )
-    callbacks.append(val_callback)
 
     checkpoint_name = utils.get_model_name(config.cfg["dataset"], config.cfg["model"])
     checkpoint_path = ckpt_save_path / 'checkpoints' / checkpoint_name

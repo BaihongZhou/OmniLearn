@@ -132,4 +132,4 @@ model:
   mode: "generator"
   fine_tune: false
   use_mean: false
-  lambda_adv: 0.1
+  lambda_adv: 0.5

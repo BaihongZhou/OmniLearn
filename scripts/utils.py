@@ -207,7 +207,8 @@ class TauReconDataLoader(DataLoader):
             'input_points': X[:, :, 1:3],
             'input_mask': self.mask.astype(np.float32),
             'input_jet': neutrino,
-            'input_weight': self.weight.astype(np.float32),
+            # 'input_weight': self.weight.astype(np.float32),
+            'input_weight': None,
             'input_file': self.raw_file.astype(np.int32),
         })
 

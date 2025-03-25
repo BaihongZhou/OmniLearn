@@ -7,7 +7,8 @@ from tqdm import tqdm
 import vector
 from functools import partial
 
-from stack import plot_hist
+from evaluation.stack import plot_hist
+from evaluation.correlation import plot_linearity
 
 
 def get_neutrino_candidates(reco_nu, method='random'):
@@ -190,37 +191,37 @@ if __name__ == '__main__':
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
-    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc.large_scale.2/plots')
+    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc.adv/plots')
     out_dir.mkdir(exist_ok=True)
 
     files = {
         'hhttbbSM': {
             'raw': ['data/RawData/hhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc.large_scale.2/hhttbbSM.npz'],
+            'ml': ['Output.nersc.adv/hhttbbSM.npz'],
             'signal': True,
             'color': '#cc7c71',
         },
-        # 'ytautau': {
-        #     'raw': ['data/RawData/ytautau_eval.pkl'],
-        #     'ml': ['Output.nersc.large_scale/data/ytautau_eval.npz'],
-        #     'signal': False,
-        #     'color': '#7ab656',
-        # },
+        'ytautau': {
+            'raw': ['data/RawData/ytautau_eval.pkl'],
+            'ml': ['Output.nersc.adv/ytautau.npz'],
+            'signal': False,
+            'color': '#7ab656',
+        },
         'Ztt': {
             'raw': ['data/RawData/Ztt_eval.pkl'],
-            'ml': ['Output.nersc.large_scale.2/Ztt.npz'],
+            'ml': ['Output.nersc.adv/Ztt.npz'],
             'signal': False,
             'color': '#925eb0',
         },
         'ttbar_dilep': {
             'raw': ['data/RawData/ttbar_dilep_eval.pkl'],
-            'ml': ['Output.nersc.large_scale.2/ttbar_dilep.npz'],
+            'ml': ['Output.nersc.adv/ttbar_dilep.npz'],
             'signal': False,
             'color': '#7399f4',
         },
         'VBFhhttbbSM': {
             'raw': ['data/RawData/VBFhhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc.large_scale.2/VBFhhttbbSM.npz'],
+            'ml': ['Output.nersc.adv/VBFhhttbbSM.npz'],
             'signal': True,
             'color': '#a5aeb7',
         },
@@ -307,4 +308,13 @@ if __name__ == '__main__':
                 fig_size=(10, 8),
                 x_title=f'$\\Delta$ {x_title}',
                 save_path=out_dir / f'delta_{var}_{kin}.png'
+            )
+
+            plot_linearity(
+                data=nominal,
+                truth=truth,
+                weight_col='weight',
+                column=kin,
+                x_title=x_title,
+                save_path=out_dir / f'linearity_{var}_{kin}'
             )

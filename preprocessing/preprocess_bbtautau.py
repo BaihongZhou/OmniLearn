@@ -7,7 +7,7 @@ current_file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_file_path)
 
 import numpy as np
-import glob
+import vector
 import h5py as h5
 import pickle
 import vector
@@ -15,49 +15,111 @@ import vector
 from configs.global_config import load_config, save_config
 import configs.global_config as config
 
+import numpy as np
+import vector
 
-def build_condition_vector(jets, y_met, jet_pt_threshold: float = 10.0):
-    # X: (n_events, n_particles, n_features)
-    # y_met: (n_events, 2) → [MET_pt, MET_phi]
 
-    # Extract jets assuming first 2 particles are taus
-    jet_pts = jets[..., 0]
-    jet_phis = jets[..., 2]
+def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
+    jets = vector.arr({
+        "pt": jets[..., 0],
+        "eta": jets[..., 1],
+        "phi": jets[..., 2],
+        "mass": jets[..., 3]
+    })
+    taus = vector.arr({
+        "pt": taus[..., 0],
+        "eta": taus[..., 1],
+        "phi": taus[..., 2],
+        "mass": taus[..., 3]
+    })
+    met = vector.arr({
+        "pt": y_met[:, 0],
+        "phi": y_met[:, 1],
+        "eta": np.zeros_like(y_met[:, 0]),
+        "mass": np.zeros_like(y_met[:, 0])
+    })
 
-    # Sort jets by pt in descending order
-    sorted_indices = np.argsort(-jet_pts, axis=1)  # descending
-    sorted_pts = np.take_along_axis(jet_pts, sorted_indices, axis=1)
-    sorted_phis = np.take_along_axis(jet_phis, sorted_indices, axis=1)
+    tau1, tau2 = taus[:, 0], taus[:, 1]
+    # jets = [jets[:, i] for i in range(jets.shape[1])]
+    tau1_pt = tau1.pt
+    tau2_pt = tau2.pt
+    HT_Tau = tau1.pt + tau2.pt
+    deltaR_tau = tau1.deltaR(tau2)
 
-    # Recompute observables with sorted jets
-    HT = np.sum(sorted_pts, axis=1, keepdims=True)
-    N_jets = np.sum(sorted_pts > jet_pt_threshold, axis=1, keepdims=True)
+    HT_Jet = np.sum(jets.pt, axis=1)
+    N_jets = np.sum(jets.pt > jet_pt_threshold, axis=1)
 
-    # Δϕ between MET and leading jet (after sorting)
-    met_pt, met_phi = y_met[:, 0], y_met[:, 1]
-    delta_phi = np.abs(sorted_phis[:, 0] - met_phi)
-    delta_phi = np.mod(delta_phi + np.pi, 2 * np.pi) - np.pi
-    delta_phi = np.abs(delta_phi)[:, None]
+    met_deltaphi_tau1 = met.deltaphi(tau1)
+    met_deltaphi_tau2 = met.deltaphi(tau2)
 
-    # MET cartesian
-    met_px = met_pt * np.cos(met_phi)
-    met_py = met_pt * np.sin(met_phi)
+    met_deltaphi_jet0 = met.deltaphi(jets[:, 0])
+    met_deltaphi_jet1 = met.deltaphi(jets[:, 1])
+    met_deltaphi_jet2 = met.deltaphi(jets[:, 2])
+    met_deltaphi_jet3 = met.deltaphi(jets[:, 3])
+    met_deltaphi_jet4 = met.deltaphi(jets[:, 4])
 
-    # MET significance
-    met_sig = met_pt / np.sqrt(HT[:, 0] + 1e-6)
-    met_sig = met_sig[:, None]
+    MET_sig_jet = met.pt / np.sqrt(HT_Jet + 1e-6)
+    MET_sig_tau = met.pt / np.sqrt(HT_Tau + 1e-6)
 
-    # Final conditioning vector
-    condition_vector = np.hstack([
-        met_px[:, None],
-        met_py[:, None],
-        HT,
-        N_jets,
-        delta_phi,
-        met_sig
-    ])
+    met_balance = met.pt / (tau1.pt + tau2.pt + 1e-6)
+    met_balance_1 = met.pt / (tau1.pt + 1e-6)
+    met_balance_2 = met.pt / (tau2.pt + 1e-6)
 
-    return condition_vector
+    all_inputs = {
+        "met_pt": met.pt,
+        "met_phi": met.phi,
+        "N_jets": N_jets,
+        "HT_Tau": HT_Tau,
+        "MET_sig_tau": MET_sig_tau,
+        "tau1_pt": tau1_pt,
+        "tau2_pt": tau2_pt,
+        "deltaR_tau": deltaR_tau,
+        "met_deltaphi_tau1": met_deltaphi_tau1,
+        "met_deltaphi_tau2": met_deltaphi_tau2,
+        "HT_Jet": HT_Jet,
+        "MET_sig_jet": MET_sig_jet,
+        "met_deltaphi_jet0": met_deltaphi_jet0,
+        "met_deltaphi_jet1": met_deltaphi_jet1,
+        "met_deltaphi_jet2": met_deltaphi_jet2,
+        "met_deltaphi_jet3": met_deltaphi_jet3,
+        "met_deltaphi_jet4": met_deltaphi_jet4,
+
+        "met_balance": met_balance,
+        "met_balance_1": met_balance_1,
+        "met_balance_2": met_balance_2,
+    }
+
+    def corr(x, y): return np.corrcoef(x, y)[0, 1]
+
+    # nu1_pt = nu[:, 0]
+    # nu2_pt = nu[:, 3]
+
+    selected_inputs = {
+        name: arr for name, arr in all_inputs.items()
+        # if name in ['met_pt', 'met_phi', 'N_jets'] or
+        #    max(abs(corr(nu1_pt, arr)), abs(corr(nu2_pt, arr))) >= 0.2
+    }
+
+    condition_vector = np.stack([v for v in selected_inputs.values()], axis=1)
+    all_inputs_name = list(selected_inputs.keys())
+    return condition_vector, all_inputs_name
+
+
+def calculate_correlations(cond_vec, nu, input_names):
+    truth_nu1_pt = nu[:, 0]
+    truth_nu2_pt = nu[:, 3]
+
+    names = input_names
+
+    print("### Pearson Correlation with ν1 pT:")
+    for i, name in enumerate(names):
+        corr = np.corrcoef(truth_nu1_pt, cond_vec[:, i])[0, 1]
+        print(f"  {name:20}: {corr:.3f}")
+
+    print("\n### Pearson Correlation with ν2 pT:")
+    for i, name in enumerate(names):
+        corr = np.corrcoef(truth_nu2_pt, cond_vec[:, i])[0, 1]
+        print(f"  {name:20}: {corr:.3f}")
 
 
 def process(
@@ -169,7 +231,9 @@ def process(
     # Assuming first 2 particles = tau_vis → jets start from index 2
     jet_start_index = len(features['tau_vis']['particles'])
     jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
-    y = build_condition_vector(jets_X, y)
+    tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
+    y, input_names = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y)
+    calculate_correlations(y, nu, input_names)
 
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt
@@ -210,9 +274,11 @@ def process(
 
         split_idx = int(len(X) * train_ratio)  # Compute split index
         train_data = (
-        X[:split_idx], nu[:split_idx], y[:split_idx], Extra[:split_idx], Weight[:split_idx], list(Raw_File[:split_idx]))
+            X[:split_idx], nu[:split_idx], y[:split_idx], Extra[:split_idx], Weight[:split_idx],
+            list(Raw_File[:split_idx]))
         test_data = (
-        X[split_idx:], nu[split_idx:], y[split_idx:], Extra[split_idx:], Weight[split_idx:], list(Raw_File[split_idx:]))
+            X[split_idx:], nu[split_idx:], y[split_idx:], Extra[split_idx:], Weight[split_idx:],
+            list(Raw_File[split_idx:]))
 
         # Save train & test data
         save_hdf5(train_file, ["X", "nu", "Condition", "Extra", "Weight", "RawFile"], train_data, mode="train")

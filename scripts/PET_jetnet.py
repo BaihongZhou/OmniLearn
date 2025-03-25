@@ -9,6 +9,7 @@ from tensorflow.keras.models import Model
 from PET import PET, FourierProjection, get_encoding
 from layers import StochasticDepth, LayerScale
 from tqdm import tqdm
+from tensorflow.keras.optimizers.schedules import PolynomialDecay
 
 
 class ProcessDiscriminator(keras.Model):
@@ -72,9 +73,14 @@ class PET_jetnet(keras.Model):
 
         self.adv_model = ProcessDiscriminator(input_dim=self.num_jet, num_processes=num_adv_classes)
         self.adv_loss_tracker = keras.metrics.Mean(name="adv_loss")
-        self.lambda_adv = lambda_adv
         self.num_adv_classes = num_adv_classes
         self.adv_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)  # Or Lion if you like
+        self.lambda_adv_schedule = PolynomialDecay(
+            initial_learning_rate=0.0,
+            decay_steps=50000,  # total steps or estimated steps
+            end_learning_rate=lambda_adv,
+            power=1.0  # linear ramp-up
+        )
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -239,7 +245,10 @@ class PET_jetnet(keras.Model):
             adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
             adv_loss = tf.reduce_mean(adv_loss)
 
-            total_loss = loss - self.lambda_adv * adv_loss
+            current_step = tf.cast(self.optimizer.iterations, tf.float32)
+            lambda_adv = self.lambda_adv_schedule(current_step)
+
+            total_loss = loss - lambda_adv * adv_loss
 
         # Update generator (PET)
         self.body_optimizer.minimize(total_loss, self.body.trainable_variables, tape=tape)

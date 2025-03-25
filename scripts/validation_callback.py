@@ -17,6 +17,8 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
     if hvd.rank() == 0:
         import wandb
 
+    save_plots = (epoch % 15 == 0)
+
     results = {}
 
     logger.info("[Eval Distribution] Evaluating neutrino distributions")
@@ -32,41 +34,42 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
             x = pred[:, j].ravel()
             y = truth[:, j].ravel()
 
-            # Define bounded range (1.5× range of truth)
-            min_truth, max_truth = np.min(y), np.max(y)
-            truth_range = max_truth - min_truth
-            buffer = 0.25 * truth_range  # extra 0.5× range split evenly on both sides
-            low = min_truth - buffer
-            high = max_truth + buffer
-
-            # Create bins including underflow/overflow
-            n_bins = 51
-            bins = np.linspace(low, high, n_bins - 2)  # exclude 2 bins to add first/last manually
-            bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])  # add extreme edges for over/underflow
-
-            # Compute histograms
-            hist_pred, _ = np.histogram(x, bins=bins, density=True)
-            hist_truth, _ = np.histogram(y, bins=bins, density=True)
-            bin_centers = 0.5 * (bins[1:] + bins[:-1])
-
             # Log EMD & Pearson
             results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
             results[f"{prefix}/Pearson_{name}"] = pearsonr(x, y)[0]
 
-            # Plot
-            fig, ax = plt.subplots()
-            ax.step(bin_centers, hist_pred, where='mid', label='pred', linewidth=1.5)
-            ax.step(bin_centers, hist_truth, where='mid', label='truth', linewidth=1.5)
-            ax.set_xlim([low, high])
-            ax.set_title(f"{prefix} {name} dist @ epoch {epoch}")
-            ax.legend()
-            ax.grid(True)
+            if save_plots:
+                # Define bounded range (1.5× range of truth)
+                min_truth, max_truth = np.min(y), np.max(y)
+                truth_range = max_truth - min_truth
+                buffer = 0.25 * truth_range  # extra 0.5× range split evenly on both sides
+                low = min_truth - buffer
+                high = max_truth + buffer
 
-            wandb.log({f"{prefix}/dist_{name}": wandb.Image(fig)})
-            plt.close(fig)
+                # Create bins including underflow/overflow
+                n_bins = 51
+                bins = np.linspace(low, high, n_bins - 2)  # exclude 2 bins to add first/last manually
+                bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])  # add extreme edges for over/underflow
 
-            if logger:
-                logger.info(f"[EvalCallback] --> Saved {prefix} {name} distribution plot")
+                # Compute histograms
+                hist_pred, _ = np.histogram(x, bins=bins, density=True)
+                hist_truth, _ = np.histogram(y, bins=bins, density=True)
+                bin_centers = 0.5 * (bins[1:] + bins[:-1])
+
+                # Plot
+                fig, ax = plt.subplots()
+                ax.step(bin_centers, hist_pred, where='mid', label='pred', linewidth=1.5)
+                ax.step(bin_centers, hist_truth, where='mid', label='truth', linewidth=1.5)
+                ax.set_xlim([low, high])
+                ax.set_title(f"{prefix} {name} dist @ epoch {epoch}")
+                ax.legend()
+                ax.grid(True)
+
+                wandb.log({f"{prefix}/dist_{name}": wandb.Image(fig)})
+                plt.close(fig)
+
+                if logger:
+                    logger.info(f"[EvalCallback] --> Saved {prefix} {name} distribution plot")
 
     return results
 
@@ -249,12 +252,13 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
             results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger)
-            log_vector_distribution(
-                tautau_pred, truth_tautau,
-                name="tautau", epoch=epoch,
-                raw_file=raw_file, raw_file_label_map=unique_file_map,
-                logger=self.logger,
-            )
+            if epoch % (self.eval_every * 3) == 0:
+                log_vector_distribution(
+                    tautau_pred, truth_tautau,
+                    name="tautau", epoch=epoch,
+                    raw_file=raw_file, raw_file_label_map=unique_file_map,
+                    logger=self.logger,
+                )
 
             # Log everything to Wandb
             wandb.log(results)

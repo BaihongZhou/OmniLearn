@@ -198,7 +198,8 @@ class PET_jetnet(keras.Model):
         so that `fit()` and `evaluate()` are able to `reset()` the loss tracker
         at the start of each epoch and at the start of an `evaluate()` call.
         """
-        return [self.loss_tracker, self.adv_loss_tracker]
+        # return [self.loss_tracker, self.adv_loss_tracker]
+        return [self.loss_tracker]
 
     def compile(self, body_optimizer, head_optimizer):
         super(PET_jetnet, self).compile(experimental_run_tf_function=False,
@@ -217,7 +218,7 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         raw_file = x['input_file']
-        raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
+        # raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
 
         with tf.GradientTape(persistent=True) as tape:
             # Diffusion training
@@ -282,7 +283,7 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         raw_file = x['input_file']
-        raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
+        # raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
 
         t = tf.random.uniform((batch_size, 1))
         logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)

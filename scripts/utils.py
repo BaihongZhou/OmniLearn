@@ -174,7 +174,7 @@ class TauReconDataLoader(DataLoader):
         self.num_part = self.X.shape[1]
         self.num_jet = self.neutrino.shape[1]
         self.num_classes = self.global_cond.shape[1]
-
+        self.num_adv_classes = len(unique_file) if unique_file is not None else None
         self.mean_part = sample_norm['particle']['mean']
         self.std_part = sample_norm['particle']['std']
         self.mean_jet = sample_norm['nu']['mean']
@@ -208,6 +208,7 @@ class TauReconDataLoader(DataLoader):
             'input_mask': self.mask.astype(np.float32),
             'input_jet': neutrino,
             'input_weight': self.weight.astype(np.float32),
+            'input_file': self.raw_file.astype(np.int32),
         })
 
         tf_global_cond = tf.data.Dataset.from_tensor_slices(self.global_cond)

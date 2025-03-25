@@ -72,9 +72,9 @@ features:
   weight:
     event: "weight_mc"
     sample:
-      hhttbbSM: 0.1
+      hhttbbSM: 1.0
       ytautau: 1.0
-      Ztt: 0.1
+      Ztt: 1.0
       ttbar_dilep: 0.0
       VBFhhttbbSM_: 0.0
   extra:
@@ -132,3 +132,4 @@ model:
   mode: "generator"
   fine_tune: false
   use_mean: false
+  lambda_adv: 0.1

@@ -11,6 +11,20 @@ from layers import StochasticDepth, LayerScale
 from tqdm import tqdm
 
 
+class ProcessDiscriminator(keras.Model):
+    def __init__(self, input_dim, num_processes=3, hidden_units=128):
+        super().__init__()
+        self.net = keras.Sequential([
+            layers.Input(shape=(input_dim,)),
+            layers.Dense(hidden_units, activation="relu"),
+            layers.Dense(hidden_units, activation="relu"),
+            layers.Dense(num_processes, activation="softmax")  # Multiclass classification
+        ])
+
+    def call(self, x):
+        return self.net(x)
+
+
 class PET_jetnet(keras.Model):
     """Score based generative model"""
 
@@ -40,6 +54,8 @@ class PET_jetnet(keras.Model):
             model_name=None,
             use_mean=False,
             dropout=0.0,
+            lambda_adv=1.0,
+            num_adv_classes=3,
     ):
         super(PET_jetnet, self).__init__()
 
@@ -53,6 +69,12 @@ class PET_jetnet(keras.Model):
         self.num_diffusion = num_diffusion
         self.ema = 0.999
         self.shape = (-1, 1, 1)
+
+        self.adv_model = ProcessDiscriminator(input_dim=self.num_jet, num_processes=num_adv_classes)
+        self.adv_loss_tracker = keras.metrics.Mean(name="adv_loss")
+        self.lambda_adv = lambda_adv
+        self.num_adv_classes = num_adv_classes
+        self.adv_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)  # Or Lion if you like
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -170,7 +192,7 @@ class PET_jetnet(keras.Model):
         so that `fit()` and `evaluate()` are able to `reset()` the loss tracker
         at the start of each epoch and at the start of an `evaluate()` call.
         """
-        return [self.loss_tracker]
+        return [self.loss_tracker, self.adv_loss_tracker]
 
     def compile(self, body_optimizer, head_optimizer):
         super(PET_jetnet, self).compile(experimental_run_tf_function=False,
@@ -188,7 +210,11 @@ class PET_jetnet(keras.Model):
         batch_size = tf.shape(x['input_jet'])[0]
         weight = x['input_weight']
 
+        raw_file = x['input_file']
+        raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
+
         with tf.GradientTape(persistent=True) as tape:
+            # Diffusion training
             t = tf.random.uniform((batch_size, 1))
             logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
 
@@ -201,20 +227,38 @@ class PET_jetnet(keras.Model):
                 x['input_mask'],
                 perturbed_x, t, y
             ])
-
             v_jet = alpha * eps - sigma * x['input_jet']
 
+            # Base diffusion loss
+            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
             if weight is not None:
-                loss = tf.reduce_mean(tf.square(v_pred - v_jet))
                 loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
-            else:
-                loss = tf.reduce_mean(tf.square(v_pred - v_jet))
 
-        self.body_optimizer.minimize(loss, self.body.trainable_variables, tape=tape)
-        self.optimizer.minimize(loss, self.head.trainable_variables, tape=tape)
+            # Adversarial training
+            process_logits = self.adv_model(tf.stop_gradient(v_pred))
+            adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
+            adv_loss = tf.reduce_mean(adv_loss)
 
+            total_loss = loss - self.lambda_adv * adv_loss
+
+        # Update generator (PET)
+        self.body_optimizer.minimize(total_loss, self.body.trainable_variables, tape=tape)
+        self.optimizer.minimize(total_loss, self.head.trainable_variables, tape=tape)
+
+        # Update adversary
+        with tf.GradientTape() as adv_tape:
+            process_logits = self.adv_model(v_pred)
+            adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
+            adv_loss = tf.reduce_mean(adv_loss)
+
+        adv_grads = adv_tape.gradient(adv_loss, self.adv_model.trainable_variables)
+        self.adv_optimizer.apply_gradients(zip(adv_grads, self.adv_model.trainable_variables))
+
+        # Update logs
         self.loss_tracker.update_state(loss)
+        self.adv_loss_tracker.update_state(adv_loss)
 
+        # EMA update
         for weight, ema_weight in zip(self.head.weights, self.ema_head.weights):
             ema_weight.assign(self.ema * ema_weight + (1 - self.ema) * weight)
 
@@ -228,26 +272,37 @@ class PET_jetnet(keras.Model):
         batch_size = tf.shape(x['input_jet'])[0]
         weight = x['input_weight']
 
+        raw_file = x['input_file']
+        raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
+
         t = tf.random.uniform((batch_size, 1))
         logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
 
         eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
         perturbed_x = alpha * x['input_jet'] + eps * sigma
 
-        v_pred = self.model_part([x['input_features'],
-                                  x['input_points'],
-                                  x['input_mask'],
-                                  perturbed_x, t, y])
-
+        v_pred = self.model_part([
+            x['input_features'],
+            x['input_points'],
+            x['input_mask'],
+            perturbed_x, t, y
+        ])
         v_jet = alpha * eps - sigma * x['input_jet']
 
+        # Reconstruction loss
+        loss = tf.reduce_mean(tf.square(v_pred - v_jet))
         if weight is not None:
-            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
             loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
-        else:
-            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
 
         self.loss_tracker.update_state(loss)
+
+        # Optional: track adversarial loss during test
+        if raw_file is not None:
+            adv_pred = self.adv_model(v_pred)
+            adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, adv_pred)
+            adv_loss = tf.reduce_mean(adv_loss)
+            self.adv_loss_tracker.update_state(adv_loss)
+
         return {m.name: m.result() for m in self.metrics}
 
     def call(self, x):

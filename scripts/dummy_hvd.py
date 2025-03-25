@@ -14,4 +14,6 @@ class dummy_hvd:
         return o
     def allgather(self,x):
         return x
+    def allreduce(self,x):
+        return x
 hvd=dummy_hvd()

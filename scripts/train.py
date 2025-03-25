@@ -111,6 +111,7 @@ def main():
         num_jet=train_loader.num_jet,
         num_classes=train_loader.num_classes,
         num_part=train_loader.num_part,
+        num_adv_classes=train_loader.num_adv_classes,
         model_name=None,
 
         **model_config

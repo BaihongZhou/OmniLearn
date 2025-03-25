@@ -13,22 +13,6 @@ except ImportError or ModuleNotFoundError:
     from dummy_hvd import hvd as hvd
 
 
-def compute_mmd_rbf(X, Y, gamma=1.0):
-    """
-    Maximum Mean Discrepancy with RBF kernel.
-    Args:
-        X, Y: arrays of shape (n_samples, n_features)
-        gamma: 1 / (2 * sigma^2), bandwidth of RBF
-    Returns:
-        MMD^2(X, Y)
-    """
-    XX = np.exp(-cdist(X, X, 'sqeuclidean') * gamma)
-    YY = np.exp(-cdist(Y, Y, 'sqeuclidean') * gamma)
-    XY = np.exp(-cdist(X, Y, 'sqeuclidean') * gamma)
-
-    return np.mean(XX) + np.mean(YY) - 2 * np.mean(XY)
-
-
 def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
     if hvd.rank() == 0:
         import wandb
@@ -42,11 +26,7 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
         pred = pred_nu[:, i, :]  # shape (N, 3)
         truth = truth_nu[:, i, :]
 
-        logger.info(f"[Eval Distribution] nu {i}: pred shape: {pred.shape}, truth shape: {truth.shape}")
-
-        # MMD
-        mmd = compute_mmd_rbf(pred, truth, gamma=1.0)
-        results[f"{prefix}/MMD"] = mmd
+        logger.info(f"[Eval Distribution] nu {i} --> pred shape: {pred.shape}, truth shape: {truth.shape}")
 
         for j, name in enumerate(["pt", "eta", "phi"]):
             x = pred[:, j].ravel()

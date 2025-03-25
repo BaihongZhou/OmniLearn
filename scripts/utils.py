@@ -94,6 +94,7 @@ class DataLoader:
         # Convert multiplicity back into integers
         return new_x
 
+
 def process_file_name(file_name):
     f = file_name.decode('utf-8')
     f = f.split('_')[:-1]
@@ -142,25 +143,26 @@ class TauReconDataLoader(DataLoader):
                     for idx in self.raw_file
                 ])
 
-                # Debug print: show the mapping from process index to file name
-                self.logger.info("Raw file index to filename mapping:")
-                for idx, fname in index_to_filename.items():
-                    self.logger.info(f"  [{idx}] -> {fname}")
+                if hvd.rank() == 0:
+                    # Debug print: show the mapping from process index to file name
+                    self.logger.info("Raw file index to filename mapping:")
+                    for idx, fname in index_to_filename.items():
+                        self.logger.info(f"  [{idx}] -> {fname}")
 
-                # Debug print: sample_weight_map entries
-                self.logger.info("Sample weight map:")
-                for fname, weight in sample_weight_map.items():
-                    self.logger.info(f"  {fname}: {weight}")
+                    # Debug print: sample_weight_map entries
+                    self.logger.info("Sample weight map:")
+                    for fname, weight in sample_weight_map.items():
+                        self.logger.info(f"  {fname}: {weight}")
 
-                # Debug print: actual weight assigned for each process index
-                self.logger.info("Assigned sample weights per process index:")
-                for idx in sorted(index_to_filename):
-                    mask = self.raw_file == idx
-                    assigned_weights = sample_weight[mask]
-                    if len(assigned_weights) > 0:
-                        avg_weight = np.mean(assigned_weights)
-                        self.logger.info(
-                            f"  [{idx}] {index_to_filename[idx]} -> mean weight: {avg_weight:.3f}, N = {len(assigned_weights)}")
+                    # Debug print: actual weight assigned for each process index
+                    self.logger.info("Assigned sample weights per process index:")
+                    for idx in sorted(index_to_filename):
+                        mask = self.raw_file == idx
+                        assigned_weights = sample_weight[mask]
+                        if len(assigned_weights) > 0:
+                            avg_weight = np.mean(assigned_weights)
+                            self.logger.info(
+                                f"  [{idx}] {index_to_filename[idx]} -> mean weight: {avg_weight:.3f}, N = {len(assigned_weights)}")
 
             # self.weight = event_weight * sample_weight
             self.weight = sample_weight
@@ -195,7 +197,7 @@ class TauReconDataLoader(DataLoader):
 
         return X, X[:, :, 1:3], self.mask.astype(np.float32), self.global_cond, neutrino
 
-    def make_tfdata(self, delete: bool=True):
+    def make_tfdata(self, delete: bool = True):
         X = self.preprocess(self.X, self.mask).astype(np.float32)
         X = self.pad(X, num_pad=self.num_pad)
         neutrino = self.preprocess_neutrino(self.neutrino).astype(np.float32)

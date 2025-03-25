@@ -97,8 +97,12 @@ def main():
             },
         )
 
+    logger.info(f"[Rank {hvd.rank()}] Starting loading data")
+
     train_loader, val_loader = get_data_loader()
     val_dataset = val_loader.make_tfdata(delete=True)
+
+    logger.info(f"[Rank {hvd.rank()}] Finished loading data")
 
     model_config = config.cfg['model']
     ckpt_save_path = Path(model_config.pop('ckpt_save_path'))
@@ -132,10 +136,9 @@ def main():
 
     checkpoint_name = utils.get_model_name(config.cfg["dataset"], config.cfg["model"])
     checkpoint_path = ckpt_save_path / 'checkpoints' / checkpoint_name
+    (ckpt_save_path / 'checkpoints').mkdir(parents=True, exist_ok=True)
 
     if hvd.rank() == 0:
-        print("Checkpoint name: ", checkpoint_name)
-
         checkpoint_callback = ModelCheckpoint(
             checkpoint_path,
             save_best_only=True,
@@ -144,6 +147,8 @@ def main():
             period=1
         )
         callbacks.append(checkpoint_callback)
+
+    logger.info(f"[Rank {hvd.rank()}] Starting training")
 
     model.fit(
         train_loader.make_tfdata(),

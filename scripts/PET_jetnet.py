@@ -71,16 +71,16 @@ class PET_jetnet(keras.Model):
         self.ema = 0.999
         self.shape = (-1, 1, 1)
 
-        self.adv_model = ProcessDiscriminator(input_dim=self.num_jet, num_processes=num_adv_classes)
-        self.adv_loss_tracker = keras.metrics.Mean(name="adv_loss")
-        self.num_adv_classes = num_adv_classes
-        self.adv_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)  # Or Lion if you like
-        self.lambda_adv_schedule = PolynomialDecay(
-            initial_learning_rate=0.0,
-            decay_steps=50000,  # total steps or estimated steps
-            end_learning_rate=lambda_adv,
-            power=1.0  # linear ramp-up
-        )
+        # self.adv_model = ProcessDiscriminator(input_dim=self.num_jet, num_processes=num_adv_classes)
+        # self.adv_loss_tracker = keras.metrics.Mean(name="adv_loss")
+        # self.num_adv_classes = num_adv_classes
+        # self.adv_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)  # Or Lion if you like
+        # self.lambda_adv_schedule = PolynomialDecay(
+        #     initial_learning_rate=0.0,
+        #     decay_steps=50000,  # total steps or estimated steps
+        #     end_learning_rate=lambda_adv,
+        #     power=1.0  # linear ramp-up
+        # )
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -241,31 +241,31 @@ class PET_jetnet(keras.Model):
                 loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
 
             # Adversarial training
-            process_logits = self.adv_model(tf.stop_gradient(v_pred))
-            adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
-            adv_loss = tf.reduce_mean(adv_loss)
+            # process_logits = self.adv_model(tf.stop_gradient(v_pred))
+            # adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
+            # adv_loss = tf.reduce_mean(adv_loss)
+            #
+            # current_step = tf.cast(self.optimizer.iterations, tf.float32)
+            # lambda_adv = self.lambda_adv_schedule(current_step)
 
-            current_step = tf.cast(self.optimizer.iterations, tf.float32)
-            lambda_adv = self.lambda_adv_schedule(current_step)
-
-            total_loss = loss - lambda_adv * adv_loss
+            total_loss = loss # - lambda_adv * adv_loss
 
         # Update generator (PET)
         self.body_optimizer.minimize(total_loss, self.body.trainable_variables, tape=tape)
         self.optimizer.minimize(total_loss, self.head.trainable_variables, tape=tape)
 
         # Update adversary
-        with tf.GradientTape() as adv_tape:
-            process_logits = self.adv_model(v_pred)
-            adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
-            adv_loss = tf.reduce_mean(adv_loss)
-
-        adv_grads = adv_tape.gradient(adv_loss, self.adv_model.trainable_variables)
-        self.adv_optimizer.apply_gradients(zip(adv_grads, self.adv_model.trainable_variables))
+        # with tf.GradientTape() as adv_tape:
+        #     process_logits = self.adv_model(v_pred)
+        #     adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
+        #     adv_loss = tf.reduce_mean(adv_loss)
+        #
+        # adv_grads = adv_tape.gradient(adv_loss, self.adv_model.trainable_variables)
+        # self.adv_optimizer.apply_gradients(zip(adv_grads, self.adv_model.trainable_variables))
 
         # Update logs
         self.loss_tracker.update_state(loss)
-        self.adv_loss_tracker.update_state(adv_loss)
+        # self.adv_loss_tracker.update_state(adv_loss)
 
         # EMA update
         for weight, ema_weight in zip(self.head.weights, self.ema_head.weights):
@@ -306,11 +306,11 @@ class PET_jetnet(keras.Model):
         self.loss_tracker.update_state(loss)
 
         # Optional: track adversarial loss during test
-        if raw_file is not None:
-            adv_pred = self.adv_model(v_pred)
-            adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, adv_pred)
-            adv_loss = tf.reduce_mean(adv_loss)
-            self.adv_loss_tracker.update_state(adv_loss)
+        # if raw_file is not None:
+        #     adv_pred = self.adv_model(v_pred)
+        #     adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, adv_pred)
+        #     adv_loss = tf.reduce_mean(adv_loss)
+        #     self.adv_loss_tracker.update_state(adv_loss)
 
         return {m.name: m.result() for m in self.metrics}
 

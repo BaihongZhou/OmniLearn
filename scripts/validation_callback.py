@@ -1,6 +1,5 @@
 import tensorflow as tf
 import numpy as np
-import wandb
 import logging
 import vector
 import matplotlib.pyplot as plt
@@ -31,12 +30,19 @@ def compute_mmd_rbf(X, Y, gamma=1.0):
 
 
 def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
+    if hvd.rank() == 0:
+        import wandb
+
     results = {}
+
+    logger.info("[Eval Distribution] Evaluating neutrino distributions")
 
     for i in range(2):  # for nu1 and nu2
         prefix = f"nu{i + 1}"
         pred = pred_nu[:, i, :]  # shape (N, 3)
         truth = truth_nu[:, i, :]
+
+        logger.info(f"[Eval Distribution] nu {i}: pred shape: {pred.shape}, truth shape: {truth.shape}")
 
         # MMD
         mmd = compute_mmd_rbf(pred, truth, gamma=1.0)
@@ -86,6 +92,11 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
 
 
 def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw_file_label_map=None, logger=None):
+    if hvd.rank() == 0:
+        import wandb
+
+    logger.info(f"[Log Vector Distribution] Evaluating {name} distribution")
+
     components = ["pt", "eta", "phi", "mass"]
     process_ids = np.unique(raw_file) if raw_file is not None else [None]
 
@@ -94,8 +105,9 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
             mask = (raw_file == proc_id)
             pred = pred_vec[mask]
             truth = truth_vec[mask]
-            label = raw_file_label_map.get(proc_id,
-                                           f"process_{proc_id}") if raw_file_label_map else f"process_{proc_id}"
+            label = raw_file_label_map.get(
+                proc_id, f"process_{proc_id}"
+            ) if raw_file_label_map else f"process_{proc_id}"
             suffix = f"_{label}"
         else:
             pred = pred_vec
@@ -249,6 +261,8 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         tautau_pred = tau1_full + tau2_full
 
         if hvd.rank() == 0:
+            import wandb
+
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Total events: {len(tautau_pred.pt)}")
 
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}

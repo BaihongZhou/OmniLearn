@@ -190,13 +190,13 @@ if __name__ == '__main__':
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
-    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc.large_scale/plots')
+    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc.large_scale.2/plots')
     out_dir.mkdir(exist_ok=True)
 
     files = {
         'hhttbbSM': {
             'raw': ['data/RawData/hhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc.large_scale/data/hhttbbSM_eval.npz'],
+            'ml': ['Output.nersc.large_scale.2/hhttbbSM.npz'],
             'signal': True,
             'color': '#cc7c71',
         },
@@ -208,19 +208,19 @@ if __name__ == '__main__':
         # },
         'Ztt': {
             'raw': ['data/RawData/Ztt_eval.pkl'],
-            'ml': ['Output.nersc.large_scale/data/Ztt_eval.npz'],
+            'ml': ['Output.nersc.large_scale.2/Ztt.npz'],
             'signal': False,
             'color': '#925eb0',
         },
         'ttbar_dilep': {
             'raw': ['data/RawData/ttbar_dilep_eval.pkl'],
-            'ml': ['Output.nersc.large_scale/data/ttbar_dilep_eval.npz'],
+            'ml': ['Output.nersc.large_scale.2/ttbar_dilep.npz'],
             'signal': False,
             'color': '#7399f4',
         },
         'VBFhhttbbSM': {
             'raw': ['data/RawData/VBFhhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc.large_scale/data/VBFhhttbbSM_eval.npz'],
+            'ml': ['Output.nersc.large_scale.2/VBFhhttbbSM.npz'],
             'signal': True,
             'color': '#a5aeb7',
         },

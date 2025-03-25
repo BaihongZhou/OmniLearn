@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import h5py as h5
 from sklearn.utils import shuffle
@@ -107,6 +109,7 @@ class TauReconDataLoader(DataLoader):
     ):
         super().__init__(path, batch_size, rank, size)
         in_file = h5.File(self.path, 'r')
+        self.logger = logging.getLogger('data_loader')
 
         self.X = in_file['X'][rank:nevts:size]
         self.global_cond = in_file['Condition'][rank:nevts:size]
@@ -139,6 +142,25 @@ class TauReconDataLoader(DataLoader):
                     for idx in self.raw_file
                 ])
 
+                # Debug print: show the mapping from process index to file name
+                self.logger.info("Raw file index to filename mapping:")
+                for idx, fname in index_to_filename.items():
+                    self.logger.info(f"  [{idx}] -> {fname}")
+
+                # Debug print: sample_weight_map entries
+                self.logger.info("Sample weight map:")
+                for fname, weight in sample_weight_map.items():
+                    self.logger.info(f"  {fname}: {weight}")
+
+                # Debug print: actual weight assigned for each process index
+                self.logger.info("Assigned sample weights per process index:")
+                for idx in sorted(index_to_filename):
+                    mask = self.raw_file == idx
+                    assigned_weights = sample_weight[mask]
+                    if len(assigned_weights) > 0:
+                        avg_weight = np.mean(assigned_weights)
+                        self.logger.info(
+                            f"  [{idx}] {index_to_filename[idx]} -> mean weight: {avg_weight:.3f}, N = {len(assigned_weights)}")
 
             # self.weight = event_weight * sample_weight
             self.weight = sample_weight

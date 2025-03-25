@@ -226,6 +226,7 @@ class PET_jetnet(keras.Model):
     def test_step(self, inputs):
         x, y = inputs
         batch_size = tf.shape(x['input_jet'])[0]
+        weight = x['input_weight']
 
         t = tf.random.uniform((batch_size, 1))
         logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
@@ -239,7 +240,12 @@ class PET_jetnet(keras.Model):
                                   perturbed_x, t, y])
 
         v_jet = alpha * eps - sigma * x['input_jet']
-        loss = tf.reduce_mean(tf.square(v_pred - v_jet))
+
+        if weight is not None:
+            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
+            loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
+        else:
+            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
 
         self.loss_tracker.update_state(loss)
         return {m.name: m.result() for m in self.metrics}

@@ -72,11 +72,11 @@ features:
   weight:
     event: "weight_mc"
     sample:
-      hhttbbSM_eval: 0.1
-      ytautau_eval: 1.0
-      Ztt_eval: 0.1
-      ttbar_dilep_eval: 0.0
-      VBFhhttbbSM_eval: 0.0
+      hhttbbSM: 0.1
+      ytautau: 1.0
+      Ztt: 0.1
+      ttbar_dilep: 0.0
+      VBFhhttbbSM_: 0.0
   extra:
     - "eventNumber" # 1
     - "runNumber" # 1

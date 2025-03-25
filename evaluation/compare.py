@@ -188,40 +188,42 @@ def read_variable(files: dict, var: str, weight: str = 'weight'):
 
 
 if __name__ == '__main__':
+
+    tag = 'Output.nersc.adv_0.05'
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
-    out_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/Output.nersc.adv/plots')
+    out_dir = Path(f'/Users/avencastmini/PycharmProjects/OmniLearn/workspace/{tag}/plots')
     out_dir.mkdir(exist_ok=True)
 
     files = {
         'hhttbbSM': {
             'raw': ['data/RawData/hhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc.adv/hhttbbSM.npz'],
+            'ml': [f'{tag}/hhttbbSM.npz'],
             'signal': True,
             'color': '#cc7c71',
         },
         'ytautau': {
             'raw': ['data/RawData/ytautau_eval.pkl'],
-            'ml': ['Output.nersc.adv/ytautau.npz'],
+            'ml': [f'{tag}/ytautau.npz'],
             'signal': False,
             'color': '#7ab656',
         },
         'Ztt': {
             'raw': ['data/RawData/Ztt_eval.pkl'],
-            'ml': ['Output.nersc.adv/Ztt.npz'],
+            'ml': [f'{tag}/Ztt.npz'],
             'signal': False,
             'color': '#925eb0',
         },
         'ttbar_dilep': {
             'raw': ['data/RawData/ttbar_dilep_eval.pkl'],
-            'ml': ['Output.nersc.adv/ttbar_dilep.npz'],
+            'ml': [f'{tag}/ttbar_dilep.npz'],
             'signal': False,
             'color': '#7399f4',
         },
         'VBFhhttbbSM': {
             'raw': ['data/RawData/VBFhhttbbSM_eval.pkl'],
-            'ml': ['Output.nersc.adv/VBFhhttbbSM.npz'],
+            'ml': [f'{tag}/VBFhhttbbSM.npz'],
             'signal': True,
             'color': '#a5aeb7',
         },

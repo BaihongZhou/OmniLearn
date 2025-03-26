@@ -105,6 +105,11 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
             span = max_val - min_val
             low, high = min_val - 0.25 * span, max_val + 0.25 * span
 
+            if k == "mass":
+                low, high = 40, 250
+            if k == "pt":
+                low, high = 0, 250
+
             bins = np.linspace(low, high, 51)
             hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
             hist_truth, _ = np.histogram(x_truth, bins=bins, density=True)

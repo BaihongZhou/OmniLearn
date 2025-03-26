@@ -15,9 +15,6 @@ import vector
 from configs.global_config import load_config, save_config
 import configs.global_config as config
 
-import numpy as np
-import vector
-
 
 def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     jets = vector.arr({

@@ -274,7 +274,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
             results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger)
-            if epoch % (self.eval_every * 3) == 0:
+            if epoch % self.eval_every == 0:
                 log_vector_distribution(
                     tautau_pred, tautau_truth,
                     name="tautau", epoch=epoch,

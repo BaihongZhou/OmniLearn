@@ -127,7 +127,7 @@ def main():
             model=model,
             val_dataset=val_dataset,
             val_dataloader=val_loader,
-            eval_every=5,
+            eval_every=20,
             extra_list_name=[]
         )
     ]

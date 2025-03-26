@@ -33,8 +33,8 @@ def plot_linearity(
     for sample in data:
         fig, ax = plt.subplots(figsize=fig_size)
 
-        pred_vals = data[sample]['var'].to_ptphietamass()[column]
-        true_vals = truth[sample]['var'].to_ptphietamass()[column]
+        pred_vals = getattr(data[sample]['var'], column)
+        true_vals = getattr(truth[sample]['var'], column)
         weights = np.ones_like(pred_vals)
 
         # Clip to quantile range

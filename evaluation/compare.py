@@ -7,7 +7,7 @@ from tqdm import tqdm
 import vector
 from functools import partial
 
-from evaluation.stack import plot_hist
+from evaluation.stack import plot_hist, plot_reco_truth_histogram
 from evaluation.correlation import plot_linearity
 
 
@@ -23,7 +23,7 @@ def get_neutrino_candidates(reco_nu, method='random'):
 
 def pre_selection(data: dict[str, vector.MomentumNumpy4D | list], select: bool = True) -> dict:
     sel = (data['truth_TauTau'].E > 0)
-    sel &= (data['truth_TauTau'].mass < 200) & (data['truth_TauTau'].mass > 0)
+    sel &= (data['truth_TauTau'].mass < 250) & (data['truth_TauTau'].mass > 0)
     sel &= (data['truth_nu1'].pt > 0)
     sel &= (data['truth_nu2'].pt > 0)
 
@@ -90,7 +90,7 @@ def read_data(raw_files: list[Path], ml_files: list[Path]):
         ml_event_number = ml_event_number[final_indices]
         ml_run_number = ml_run_number[final_indices]
 
-        if not np.all(raw_event_number == ml_event_number) :
+        if not np.all(raw_event_number == ml_event_number):
             raise ValueError("Event numbers do not match")
 
         if not np.all(raw_run_number == ml_run_number):
@@ -132,7 +132,8 @@ def process_data(
                     'pt': np.expm1(array_data[:, 0]),
                     'eta': array_data[:, 1],
                     'phi': array_data[:, 2],
-                    'mass': np.zeros(array_data.shape[0]),
+                    # 'mass': np.zeros(array_data.shape[0]),
+                    'energy': np.expm1(array_data[:, 3]),
                 }).to_pxpypzenergy()
             else:
                 data[key] = vector.array({
@@ -155,8 +156,10 @@ def process_data(
 
     data['reco_Tau1'] = data['Tau1'] + data['reco_nu1']
     data['reco_Tau2'] = data['Tau2'] + data['reco_nu2']
+
     data['reco_TauTau'] = data['reco_Tau1'] + data['reco_Tau2']
     data['reco_HH'] = data['reco_TauTau'] + data['Jet_b1'] + data['Jet_b2']
+    data['HH_mmc'] = data['mmc'] + data['Jet_b1'] + data['Jet_b2']
     data['truth_HH'] = data['truth_TauTau'] + data['truth_bb']
 
     data = pre_selection(data)
@@ -189,7 +192,8 @@ def read_variable(files: dict, var: str, weight: str = 'weight'):
 
 if __name__ == '__main__':
 
-    tag = 'Output.nersc.adv_0.05'
+    tag = 'Output.nersc.gamma_only/data.2'
+    # tag = 'Output'
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
@@ -236,6 +240,7 @@ if __name__ == '__main__':
         'reco_nu1', 'reco_nu2',
         'Jet_b1', 'Jet_b2',
         'truth_bb',
+        'mmc',
     ]
 
     delta_columns = [
@@ -270,53 +275,80 @@ if __name__ == '__main__':
         truth = read_variable(files, f'truth_{var}', 'weight_mc')
         delta_nominal = read_variable(files, f'delta_{var}', 'weight_mc')
 
-        for kin, kin_title in zip(['pt', 'eta', 'phi', 'mass'], [r'p^T', r'\eta', r'\phi', r'M']):
+        if var == "TauTau":
+            mmc = read_variable(files, f'mmc', 'weight_mc')
+        elif var == "HH":
+            mmc = read_variable(files, f'HH_mmc', 'weight_mc')
+        else:
+            mmc = None
+
+        for kin, kin_title in zip(['pt', 'eta', 'phi', 'mass', 'energy'], [r'p^T', r'\eta', r'\phi', r'M', r'E']):
             x_title = var_title.replace('M', kin_title)
 
-            plot_hist(
-                data=nominal,
-                column_to_plot=kin,
-                weight_col='weight',
-                bins=100,
-                x_range=None,
-                plot_sig_percentile=(0.25, 99.75),
-                # plot_sig_percentile=None,
-                fig_size=(10, 8),
-                x_title=x_title,
-                save_path=out_dir / f'{var}_{kin}.png'
-            )
+            x_range = None
+            plot_sig_percentile = (0.025, 0.975)
+            if kin == "mass" and var == "TauTau":
+                x_range = (40, 250)
+                plot_sig_percentile = None
 
-            plot_hist(
-                data=truth,
-                column_to_plot=kin,
-                weight_col='weight',
-                bins=100,
-                x_range=None,
-                plot_sig_percentile=(0.25, 99.75),
-                # plot_sig_percentile=None,
-                fig_size=(10, 8),
-                x_title=x_title,
-                save_path=out_dir / f'{var}_{kin}_truth.png'
-            )
+            # plot_hist(
+            #     data=nominal,
+            #     column_to_plot=kin,
+            #     weight_col='weight',
+            #     bins=100,
+            #     x_range=x_range,
+            #     plot_sig_percentile=plot_sig_percentile,
+            #     # plot_sig_percentile=None,
+            #     fig_size=(10, 8),
+            #     x_title=x_title,
+            #     save_path=out_dir / f'{var}_{kin}.png',
+            #     compare=mmc if var == "TauTau" else None
+            # )
+            #
+            # plot_hist(
+            #     data=truth,
+            #     column_to_plot=kin,
+            #     weight_col='weight',
+            #     bins=100,
+            #     x_range=x_range,
+            #     plot_sig_percentile=plot_sig_percentile,
+            #     # plot_sig_percentile=None,
+            #     fig_size=(10, 8),
+            #     x_title=x_title,
+            #     save_path=out_dir / f'{var}_{kin}_truth.png'
+            # )
+            #
+            # plot_hist(
+            #     data=delta_nominal,
+            #     column_to_plot=kin,
+            #     delta_data=truth,
+            #     weight_col='weight',
+            #     bins=100,
+            #     x_range=(-2.0, 2.0),
+            #     plot_sig_percentile=None,
+            #     fig_size=(10, 8),
+            #     x_title=f'$\\Delta$ {x_title}',
+            #     save_path=out_dir / f'delta_{var}_{kin}.png'
+            # )
+            #
+            # plot_linearity(
+            #     data=nominal,
+            #     truth=truth,
+            #     weight_col='weight',
+            #     column=kin,
+            #     x_title=x_title,
+            #     save_path=out_dir / f'linearity_{var}_{kin}'
+            # )
 
-            plot_hist(
-                data=delta_nominal,
-                column_to_plot=kin,
-                delta_data=truth,
-                weight_col='weight',
-                bins=100,
-                x_range=(-2.0, 2.0),
-                plot_sig_percentile=None,
-                fig_size=(10, 8),
-                x_title=f'$\\Delta$ {x_title}',
-                save_path=out_dir / f'delta_{var}_{kin}.png'
-            )
-
-            plot_linearity(
+            plot_reco_truth_histogram(
                 data=nominal,
                 truth=truth,
-                weight_col='weight',
                 column=kin,
                 x_title=x_title,
-                save_path=out_dir / f'linearity_{var}_{kin}'
+                weight_col='weight',
+                save_path=out_dir / f"reco_truth_{var}_{kin}",
+                quantiles=plot_sig_percentile,
+                x_range=x_range,
+                extra_data=mmc,
+                extra_label="MMC" if mmc else None
             )

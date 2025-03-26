@@ -25,7 +25,7 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
 
     for i in range(2):  # for nu1 and nu2
         prefix = f"nu{i + 1}"
-        pred = pred_nu[:, i, :]  # shape (N, 3)
+        pred = pred_nu[:, i, :]  # shape (N, 4)
         truth = truth_nu[:, i, :]
 
         logger.info(f"[Eval Distribution] nu {i} --> pred shape: {pred.shape}, truth shape: {truth.shape}")
@@ -80,7 +80,7 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
 
     logger.info(f"[Log Vector Distribution] Evaluating {name} distribution")
 
-    components = ["pt", "eta", "phi", "mass"]
+    components = ["pt", "eta", "phi", "mass", "energy"]
     process_ids = np.unique(raw_file) if raw_file is not None else [None]
 
     for proc_id in process_ids:
@@ -103,14 +103,16 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
 
             min_val, max_val = np.min(x_truth), np.max(x_truth)
             span = max_val - min_val
-            low, high = min_val - 0.25 * span, max_val + 0.25 * span
+            low, high = min_val - 0.15 * span, max_val + 0.15 * span
 
             if k == "mass":
                 low, high = 40, 250
             if k == "pt":
                 low, high = 0, 250
+            if k == "energy":
+                low, high = 0, 1000
 
-            bins = np.linspace(low, high, 51)
+            bins = np.linspace(low, high, 101)
             hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
             hist_truth, _ = np.histogram(x_truth, bins=bins, density=True)
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
@@ -196,8 +198,8 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             candidate=1,
         )
 
-        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, 2, 3)  # shape: (N, 6)
-        truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, 2, 3)
+        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, 2, 4)  # shape: (N, 6)
+        truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, 2, 4)
 
         # Convert vector arrays to plain numpy before allgather
         tau1_array = np.stack([extra[:, 2], extra[:, 3], extra[:, 4], extra[:, 5]], axis=1)
@@ -216,13 +218,13 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "pt": tau1_array[:, 0],
             "eta": tau1_array[:, 1],
             "phi": tau1_array[:, 2],
-            "mass": tau1_array[:, 3],
+            "energy": tau1_array[:, 3],
         })
         tau2 = vector.arr({
             "pt": tau2_array[:, 0],
             "eta": tau2_array[:, 1],
             "phi": tau2_array[:, 2],
-            "mass": tau2_array[:, 3],
+            "energy": tau2_array[:, 3],
         })
         # truth_tautau = vector.arr({
         #     "pt": truth_tautau_array[:, 0],
@@ -235,27 +237,27 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "pt": np.expm1(truth_nu[:, 0, 0]),
             "eta": truth_nu[:, 0, 1],
             "phi": truth_nu[:, 0, 2],
-            "mass": np.zeros_like(truth_nu[:, 0, 0]),
+            "energy": np.expm1(truth_nu[:, 0, 3]),
         })
 
         truth_nu2 = vector.arr({
             "pt": np.expm1(truth_nu[:, 1, 0]),
             "eta": truth_nu[:, 1, 1],
             "phi": truth_nu[:, 1, 2],
-            "mass": np.zeros_like(truth_nu[:, 1, 0]),
+            "energy": np.expm1(truth_nu[:, 1, 3]),
         })
 
         nu1 = vector.arr({
             "pt": np.expm1(pred_nu[:, 0, 0]),
             "eta": pred_nu[:, 0, 1],
             "phi": pred_nu[:, 0, 2],
-            "mass": np.zeros_like(pred_nu[:, 0, 0]),
+            "energy": np.expm1(pred_nu[:, 0, 3]),
         })
         nu2 = vector.arr({
             "pt": np.expm1(pred_nu[:, 1, 0]),
             "eta": pred_nu[:, 1, 1],
             "phi": pred_nu[:, 1, 2],
-            "mass": np.zeros_like(pred_nu[:, 1, 0]),
+            "energy": np.expm1(pred_nu[:, 1, 3]),
         })
 
         tau1_full = tau1 + nu1

@@ -24,13 +24,13 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
         "pt": jets[..., 0],
         "eta": jets[..., 1],
         "phi": jets[..., 2],
-        "mass": jets[..., 3]
+        "energy": jets[..., 3]
     })
     taus = vector.arr({
         "pt": taus[..., 0],
         "eta": taus[..., 1],
         "phi": taus[..., 2],
-        "mass": taus[..., 3]
+        "energy": taus[..., 3]
     })
     met = vector.arr({
         "pt": y_met[:, 0],
@@ -48,15 +48,10 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
 
     HT_Jet = np.sum(jets.pt, axis=1)
     N_jets = np.sum(jets.pt > jet_pt_threshold, axis=1)
+    mean_jet = jets.sum(axis=1) / (N_jets + 1)
 
     met_deltaphi_tau1 = met.deltaphi(tau1)
     met_deltaphi_tau2 = met.deltaphi(tau2)
-
-    met_deltaphi_jet0 = met.deltaphi(jets[:, 0])
-    met_deltaphi_jet1 = met.deltaphi(jets[:, 1])
-    met_deltaphi_jet2 = met.deltaphi(jets[:, 2])
-    met_deltaphi_jet3 = met.deltaphi(jets[:, 3])
-    met_deltaphi_jet4 = met.deltaphi(jets[:, 4])
 
     MET_sig_jet = met.pt / np.sqrt(HT_Jet + 1e-6)
     MET_sig_tau = met.pt / np.sqrt(HT_Tau + 1e-6)
@@ -66,27 +61,27 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     met_balance_2 = met.pt / (tau2.pt + 1e-6)
 
     all_inputs = {
-        "met_pt": met.pt,
+        "met_pt": np.log1p(met.pt),
         "met_phi": met.phi,
-        "N_jets": N_jets,
-        "HT_Tau": HT_Tau,
-        "MET_sig_tau": MET_sig_tau,
-        "tau1_pt": tau1_pt,
-        "tau2_pt": tau2_pt,
-        "deltaR_tau": deltaR_tau,
-        "met_deltaphi_tau1": met_deltaphi_tau1,
-        "met_deltaphi_tau2": met_deltaphi_tau2,
-        "HT_Jet": HT_Jet,
-        "MET_sig_jet": MET_sig_jet,
-        "met_deltaphi_jet0": met_deltaphi_jet0,
-        "met_deltaphi_jet1": met_deltaphi_jet1,
-        "met_deltaphi_jet2": met_deltaphi_jet2,
-        "met_deltaphi_jet3": met_deltaphi_jet3,
-        "met_deltaphi_jet4": met_deltaphi_jet4,
+        # "N_jets": N_jets,
+        "HT_Tau": np.log1p(HT_Tau),
+        "MET_sig_tau": np.log1p(MET_sig_tau),
+        # "tau1_pt": tau1_pt,
+        # "tau2_pt": tau2_pt,
+        # "deltaR_tau": deltaR_tau,
+        # "met_deltaphi_tau1": met_deltaphi_tau1,
+        # "met_deltaphi_tau2": met_deltaphi_tau2,
+        "HT_Jet": np.log1p(HT_Jet),
+        "MET_sig_jet": np.log1p(MET_sig_jet),
 
-        "met_balance": met_balance,
-        "met_balance_1": met_balance_1,
-        "met_balance_2": met_balance_2,
+        # "met_balance": met_balance,
+        # "met_balance_1": met_balance_1,
+        # "met_balance_2": met_balance_2,
+
+        # "mean_jet_pt": mean_jet.pt,
+        # "mean_jet_eta": mean_jet.eta,
+        # "mean_jet_phi": mean_jet.phi,
+        # "mean_jet_energy": mean_jet.energy,
     }
 
     def corr(x, y): return np.corrcoef(x, y)[0, 1]
@@ -107,7 +102,7 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
 
 def calculate_correlations(cond_vec, nu, input_names):
     truth_nu1_pt = nu[:, 0]
-    truth_nu2_pt = nu[:, 3]
+    truth_nu2_pt = nu[:, 4]
 
     names = input_names
 
@@ -184,8 +179,8 @@ def process(
 
                     if category == 'met':
                         phi, mass = data[particle][:, 1], np.zeros_like(pt)
-                    elif category == "nu":
-                        eta, phi, mass = data[particle][:, 1], data[particle][:, 2], np.zeros_like(pt)
+                    # elif category == "nu":
+                    #     eta, phi, mass = data[particle][:, 1], data[particle][:, 2], np.zeros_like(pt)
                     else:
                         eta, phi, mass = data[particle][:, 1], data[particle][:, 2], data[particle][:, 3]
 
@@ -226,10 +221,27 @@ def process(
     Extra = np.vstack(Extra)
     weight = np.vstack(weight)
 
+    jet_start_index = len(features['tau_vis']['particles'])
+
+    if features['jet'].get('merge_jet', False):
+        mask = X[:, jet_start_index:, 0] > 0
+        valid_counts = np.maximum(mask.sum(axis=1), 1)
+        sum_pt = np.where(mask, X[:, jet_start_index:, 0], 0).sum(axis=1)
+        sum_eta = np.where(mask, X[:, jet_start_index:, 1], 0).sum(axis=1)
+        sum_phi = np.where(mask, X[:, jet_start_index:, 2], 0).sum(axis=1)
+        sum_E = np.where(mask, X[:, jet_start_index:, 3], 0).sum(axis=1)
+
+        X[:, jet_start_index, :4] = np.stack([
+            sum_pt / valid_counts,
+            sum_eta / valid_counts,
+            sum_phi / valid_counts,
+            sum_E / valid_counts
+        ], axis=-1)
+        X = X[:, :jet_start_index + 1]
+
     # calculating MET-jet related variables for conditioning
     # Extract jets from X
     # Assuming first 2 particles = tau_vis → jets start from index 2
-    jet_start_index = len(features['tau_vis']['particles'])
     jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
     tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
     y, input_names = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y)
@@ -239,18 +251,23 @@ def process(
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt
     X[:, :, 3] = np.log1p(X[:, :, 3])  # energy
     nu[:, 0] = np.log1p(nu[:, 0])  # nu1 pt
-    nu[:, 3] = np.log1p(nu[:, 3])  # nu2 pt
+    nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
+    nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
+    nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
 
     if for_training:
         # Indices to compute mean and std
         selected_indices = [0, 3]
         particle_mean = np.zeros(X.shape[2])
         particle_std = np.ones(X.shape[2])
-        nu_mean = np.zeros(nu.shape[1])
-        nu_std = np.ones(nu.shape[1])
         for idx in selected_indices:
             particle_mean[idx] = np.mean(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
             particle_std[idx] = np.std(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
+
+        selected_indices = [0, 3, 4, 7]
+        nu_mean = np.zeros(nu.shape[1])
+        nu_std = np.ones(nu.shape[1])
+        for idx in selected_indices:
             nu_mean[idx] = np.mean(nu[:, idx], axis=0, where=nu[:, idx] != 0)
             nu_std[idx] = np.std(nu[:, idx], axis=0, where=nu[:, idx] != 0)
 

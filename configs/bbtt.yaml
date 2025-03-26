@@ -7,7 +7,7 @@ preprocess:
     raw_folder: "./RawData"
     processed_folder: &processed_folder "./NumpyData"
     sample_list:
-      - "hhttbbSM_eval.pkl"
+#      - "hhttbbSM_eval.pkl"
       - "ytautau_eval.pkl"
   evaluation:
     for_training: false
@@ -17,7 +17,7 @@ preprocess:
     split_save: true
     sample_list:
       - "hhttbbSM_eval.pkl"
-      - "ytautau_eval.pkl"
+#      - "ytautau_eval.pkl"
 
 sample:
   base_folder: *processed_folder
@@ -41,7 +41,7 @@ evaluation:
 
 features:
   nu:
-    kinematic: [ "pt", "eta", "phi" ]
+    kinematic: [ "pt", "eta", "phi", "energy" ]
     particles:
       - truth_nu1
       - truth_nu2
@@ -57,6 +57,7 @@ features:
   jet:
     kinematic: [ "pt", "eta", "phi", "energy" ]
     extra: [ ]
+    merge_jet: true
     particles:
       - Jet_b1
       - Jet_b2

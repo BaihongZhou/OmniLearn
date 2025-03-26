@@ -219,11 +219,25 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "phi": tau2_array[:, 2],
             "mass": tau2_array[:, 3],
         })
-        truth_tautau = vector.arr({
-            "pt": truth_tautau_array[:, 0],
-            "eta": truth_tautau_array[:, 1],
-            "phi": truth_tautau_array[:, 2],
-            "mass": truth_tautau_array[:, 3],
+        # truth_tautau = vector.arr({
+        #     "pt": truth_tautau_array[:, 0],
+        #     "eta": truth_tautau_array[:, 1],
+        #     "phi": truth_tautau_array[:, 2],
+        #     "mass": truth_tautau_array[:, 3],
+        # })
+
+        truth_nu1 = vector.arr({
+            "pt": np.expm1(truth_nu[:, 0, 0]),
+            "eta": truth_nu[:, 0, 1],
+            "phi": truth_nu[:, 0, 2],
+            "mass": np.zeros_like(truth_nu[:, 0, 0]),
+        })
+
+        truth_nu2 = vector.arr({
+            "pt": np.expm1(truth_nu[:, 1, 0]),
+            "eta": truth_nu[:, 1, 1],
+            "phi": truth_nu[:, 1, 2],
+            "mass": np.zeros_like(truth_nu[:, 1, 0]),
         })
 
         nu1 = vector.arr({
@@ -242,6 +256,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         tau1_full = tau1 + nu1
         tau2_full = tau2 + nu2
         tautau_pred = tau1_full + tau2_full
+        tautau_truth = tau1 + truth_nu1 + tau2 + truth_nu2
 
         if hvd.rank() == 0:
             import wandb
@@ -254,7 +269,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger)
             if epoch % (self.eval_every * 3) == 0:
                 log_vector_distribution(
-                    tautau_pred, truth_tautau,
+                    tautau_pred, tautau_truth,
                     name="tautau", epoch=epoch,
                     raw_file=raw_file, raw_file_label_map=unique_file_map,
                     logger=self.logger,

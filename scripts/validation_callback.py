@@ -87,6 +87,7 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
             mask = (raw_file == proc_id)
             pred = pred_vec[mask]
             truth = truth_vec[mask]
+            weights = weight[mask]
             label = raw_file_label_map.get(
                 proc_id, f"process_{proc_id}"
             ) if raw_file_label_map else f"process_{proc_id}"
@@ -113,7 +114,7 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
 
             bins = np.linspace(low, high, 101)
             hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
-            hist_truth, _ = np.histogram(x_truth, bins=bins, density=True, weights=weight)
+            hist_truth, _ = np.histogram(x_truth, bins=bins, density=True, weights=weights)
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
 
             fig, ax = plt.subplots()

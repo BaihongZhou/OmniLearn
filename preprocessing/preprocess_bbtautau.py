@@ -147,21 +147,22 @@ def build_extra_targets(
         "mass": data[truth_name][:, 3]
     }).to_pxpypzenergy()
 
-    sum_metx1x2 = met + x1 + x2
-
-    # diff = np.array([
-    #     truth_sum.px - sum_metx1x2.px,
-    #     truth_sum.py - sum_metx1x2.py,
-    #     truth_sum.pz - sum_metx1x2.pz,
-    #     truth_sum.energy - sum_metx1x2.energy
-    # ])
+    # sum_metx1x2 = met + x1 + x2
+    sum_metx1x2 = x1 + x2
 
     diff = np.array([
-        truth_sum.pt,
-        truth_sum.eta,
-        truth_sum.phi,
-        truth_sum.energy,
+        truth_sum.px - sum_metx1x2.px,
+        truth_sum.py - sum_metx1x2.py,
+        truth_sum.pz - sum_metx1x2.pz,
+        truth_sum.energy - sum_metx1x2.energy
     ])
+
+    # diff = np.array([
+    #     truth_sum.pt,
+    #     truth_sum.eta,
+    #     truth_sum.phi,
+    #     truth_sum.energy,
+    # ])
 
     return diff.T
 
@@ -306,8 +307,10 @@ def process(
     nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
     nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
     nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
-    nu[:, 8] = np.log1p(nu[:, 8])  # truth TauTau pt
-    nu[:, 11] = np.log1p(nu[:, 11])  # truth TauTau energy
+    nu[:, 8] = np.log1p(np.maximum(nu[:, 8], 0))  # truth_tautau - (tau1 + tau2) px
+    nu[:, 9] = np.log1p(np.maximum(nu[:, 9], 0))  # truth_tautau - (tau1 + tau2) py
+    nu[:, 10] = np.log1p(np.maximum(nu[:, 10], 0))  # truth_tautau - (tau1 + tau2) pz
+    nu[:, 11] = np.log1p(np.maximum(nu[:, 11], 0))  # truth_tautau - (tau1 + tau2) energy
 
     if for_training:
         # Indices to compute mean and std

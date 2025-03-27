@@ -198,7 +198,8 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
 
         num_nu = 3
 
-        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu, 4)  # shape: (N, 6)
+        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu,
+                                                                                          4)  # shape: (N, 6)
         truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, num_nu, 4)
 
         # Convert vector arrays to plain numpy before allgather
@@ -226,12 +227,12 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "phi": tau2_array[:, 2],
             "energy": tau2_array[:, 3],
         })
-        # truth_tautau = vector.arr({
-        #     "pt": truth_tautau_array[:, 0],
-        #     "eta": truth_tautau_array[:, 1],
-        #     "phi": truth_tautau_array[:, 2],
-        #     "mass": truth_tautau_array[:, 3],
-        # })
+        truth_tautau = vector.arr({
+            "pt": truth_tautau_array[:, 0],
+            "eta": truth_tautau_array[:, 1],
+            "phi": truth_tautau_array[:, 2],
+            "mass": truth_tautau_array[:, 3],
+        })
 
         truth_nu1 = vector.arr({
             "pt": np.expm1(truth_nu[:, 0, 0]),
@@ -259,24 +260,26 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "phi": pred_nu[:, 1, 2],
             "energy": np.expm1(pred_nu[:, 1, 3]),
         })
-        tautau = vector.arr({
-            "pt": np.expm1(pred_nu[:, 2, 0]),
-            "eta": pred_nu[:, 2, 1],
-            "phi": pred_nu[:, 2, 2],
+        tautau_diff = vector.arr({
+            "px": np.expm1(pred_nu[:, 2, 0]),
+            "py": np.expm1(pred_nu[:, 2, 1]),
+            "pz": np.expm1(pred_nu[:, 2, 2]),
             "energy": np.expm1(pred_nu[:, 2, 3]),
         })
 
         tau1_full = tau1 + nu1
         tau2_full = tau2 + nu2
-        tautau_pred = tau1_full + tau2_full
-        tautau_truth = tau1 + truth_nu1 + tau2 + truth_nu2
+        tautau_nu_pred = tau1_full + tau2_full
+        tautau_direct_pred = (tau1 + tau2).to_pxpypzenergy() + tautau_diff
+        # tautau_truth = tau1 + truth_nu1 + tau2 + truth_nu2
+        tautau_truth = truth_tautau
 
         if hvd.rank() == 0:
             import wandb
 
             save_plots = (epoch % self.eval_every == 0)
 
-            self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Total events: {len(tautau_pred.pt)}")
+            self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Total events: {len(tautau_truth.pt)}")
 
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
@@ -284,14 +287,14 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger, save_plots=save_plots)
             if save_plots:
                 log_vector_distribution(
-                    tautau_pred, tautau_truth,
+                    tautau_nu_pred, tautau_truth,
                     name="tautau", epoch=epoch,
                     raw_file=raw_file, raw_file_label_map=unique_file_map,
                     logger=self.logger,
                 )
 
                 log_vector_distribution(
-                    tautau, tautau_truth,
+                    tautau_direct_pred, tautau_truth,
                     name="tautau_predict", epoch=epoch,
                     raw_file=raw_file, raw_file_label_map=unique_file_map,
                     logger=self.logger,
@@ -301,4 +304,3 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             wandb.log(results)
 
         _ = hvd.allreduce(tf.constant(0.0))
-

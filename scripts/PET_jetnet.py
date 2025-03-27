@@ -60,6 +60,14 @@ class PET_jetnet(keras.Model):
             lambda_adv=1.0,
             num_adv_classes=3,
             num_steps=100,
+
+            rho=3.0,
+            P_mean=-1.2,
+            P_std=1.2,
+            sigma_data=0.5,
+            S_churn=0.0,
+            S_min=0.0,
+            S_noise=1.0,
     ):
         super(PET_jetnet, self).__init__()
 
@@ -74,12 +82,16 @@ class PET_jetnet(keras.Model):
         self.ema = 0.999
         self.shape = (-1, 1, 1)
 
-        self.sigma_max = -np.inf
-        self.sigma_min = np.inf
-        self.rho = 3.0  # better balance between low and high noise
-        self.P_mean = -1.2
-        self.P_std = 1.2
-        self.sigma_data = 0.5
+        self.sigma_max = 80
+        self.sigma_min = 0.002
+        self.rho = rho  # better balance between low and high noise
+        self.P_mean = P_mean
+        self.P_std = P_std
+        self.sigma_data = sigma_data
+        self.S_churn = S_churn,
+        self.S_min = S_min,
+        self.S_max = float('inf'),
+        self.S_noise = S_noise,
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -325,6 +337,10 @@ class PET_jetnet(keras.Model):
                     sigma_min=self.sigma_min,
                     sigma_max=self.sigma_max,
                     rho=self.rho,
+                    S_churn=self.S_churn,
+                    S_min=self.S_min,
+                    S_max=float('inf'),
+                    S_noise=self.S_noise,
                 ).numpy()
 
                 jet_candidate.append(jet)

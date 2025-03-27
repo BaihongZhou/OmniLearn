@@ -15,7 +15,7 @@ from wandb.integration.keras import WandbMetricsLogger
 # Custom local imports
 import utils
 from PET_jetnet import PET_jetnet
-from validation_callback import DiffusionValidationCallback, SigmaStatsCallback
+from validation_callback import DiffusionValidationCallback
 
 # Keras imports
 from tensorflow.keras.optimizers import schedules, Lion

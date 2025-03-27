@@ -116,12 +116,6 @@ class PET_jetnet(keras.Model):
             self.model_part.load_weights(model_name, by_name=True, skip_mismatch=True)
             # self.model_part.ema_body.trainable=False
 
-        if use_mean:
-            self.mean, self.std = self.get_mean()
-        else:
-            self.mean = 0.0
-            self.std = 1.0
-
         self.body = self.model_part.ema_body
         self.head = self.model_part.ema_generator_head
 
@@ -133,7 +127,7 @@ class PET_jetnet(keras.Model):
         inputs_features = Input(shape=(None, num_feat))
         inputs_points = Input(shape=(None, 2))
 
-        x = inputs_mask * (inputs_features - self.mean) / self.std
+        x = inputs_mask * (inputs_features - 0) / 1
 
         output_body = self.body([x, inputs_points, inputs_mask, inputs_time])
         outputs = self.head([output_body, inputs_jet, inputs_mask, inputs_time, inputs_cond])
@@ -152,49 +146,8 @@ class PET_jetnet(keras.Model):
         # self.ema_part = keras.models.clone_model(self.model_part)
         self.loss_tracker = keras.metrics.Mean(name="loss")
 
-        self.multistep_coefficients = [
-            tf.constant([1], shape=(1, 1, 1, 1), dtype=tf.float32),
-            tf.constant([-1, 3], shape=(2, 1, 1, 1), dtype=tf.float32) / 2,
-            tf.constant([5, -16, 23], shape=(3, 1, 1, 1), dtype=tf.float32) / 12,
-            tf.constant([-9, 37, -59, 55], shape=(4, 1, 1, 1), dtype=tf.float32)
-            / 24,
-            tf.constant(
-                [251, -1274, 2616, -2774, 1901], shape=(5, 1, 1, 1), dtype=tf.float32
-            )
-            / 720,
-        ]
-
-    def get_mean(self):
-        # Mean and std from JetClass pretrained model to be used during fine-tuning
-        mean_pet = tf.constant([0.0, 0.0, -0.0278,
-                                0.0, 0.0, 0.0, 0.0, 0.0,
-                                0.0, 0.0, 0.0, 0.0, 0.0],
-                               shape=(1, 1, self.num_feat), dtype=tf.float32)
-        std_pet = tf.constant([0.215, 0.215, 0.070,
-                               1.0, 1.0, 1.0, 1.0, 1.0,
-                               1.0, 1.0, 1.0, 1.0, 1.0],
-                              shape=(1, 1, self.num_feat), dtype=tf.float32)
-
-        if self.max_part == 150:
-            mean_sample = tf.constant([0.0, 0.0, -0.0217,
-                                       0.0, 0.0, 0.0, 0.0, 0.0,
-                                       0.0, 0.0, 0.0, 0.0, 0.0],
-                                      shape=(1, 1, self.num_feat), dtype=tf.float32)
-            std_sample = tf.constant([0.115, 0.115, -0.054,
-                                      1.0, 1.0, 1.0, 1.0, 1.0,
-                                      1.0, 1.0, 1.0, 1.0, 1.0],
-                                     shape=(1, 1, self.num_feat), dtype=tf.float32)
-        elif self.max_part == 30:
-            mean_sample = tf.constant([0.0, 0.0, -0.035,
-                                       0.0, 0.0, 0.0, 0.0, 0.0,
-                                       0.0, 0.0, 0.0, 0.0, 0.0],
-                                      shape=(1, 1, self.num_feat), dtype=tf.float32)
-            std_sample = tf.constant([0.09, 0.09, 0.067,
-                                      1.0, 1.0, 1.0, 1.0, 1.0,
-                                      1.0, 1.0, 1.0, 1.0, 1.0],
-                                     shape=(1, 1, self.num_feat), dtype=tf.float32)
-
-        return (mean_sample - mean_pet) / std_pet, std_sample / std_pet
+        # Add this to __init__:
+        self.sigma_tracker = tf.keras.metrics.Mean(name="sigma_mean")
 
     @property
     def metrics(self):
@@ -204,7 +157,7 @@ class PET_jetnet(keras.Model):
         at the start of each epoch and at the start of an `evaluate()` call.
         """
         # return [self.loss_tracker, self.adv_loss_tracker]
-        return [self.loss_tracker]
+        return [self.loss_tracker, self.sigma_tracker]
 
     def compile(self, body_optimizer, head_optimizer):
         super(PET_jetnet, self).compile(experimental_run_tf_function=False,
@@ -281,6 +234,7 @@ class PET_jetnet(keras.Model):
         # Update logs
         self.loss_tracker.update_state(loss)
         # self.adv_loss_tracker.update_state(adv_loss)
+        self.sigma_tracker.update_state(tf.reduce_mean(sigma))
 
         # EMA update
         for weight, ema_weight in zip(self.head.weights, self.ema_head.weights):
@@ -328,6 +282,7 @@ class PET_jetnet(keras.Model):
             loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
 
         self.loss_tracker.update_state(loss)
+        self.sigma_tracker.update_state(tf.reduce_mean(sigma))
 
         # Optional: track adversarial loss during test
         # if raw_file is not None:

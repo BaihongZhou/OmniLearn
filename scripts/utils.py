@@ -213,6 +213,15 @@ class TauReconDataLoader(DataLoader):
             'input_file': self.raw_file.astype(np.int32),
         })
 
+        if hvd.rank() == 0:
+            # print shape for input features, input points, input mask, input jet, input weight, input file
+            self.logger.info(f"input_features shape: {X.shape}")
+            self.logger.info(f"input_points shape: {X[:, :, 1:3].shape}")
+            self.logger.info(f"input_mask shape: {self.mask.shape}")
+            self.logger.info(f"target shape: {neutrino.shape}")
+            self.logger.info(f"input_weight shape: {self.weight.shape}")
+            self.logger.info(f"input_file shape: {self.raw_file.shape}")
+
         tf_global_cond = tf.data.Dataset.from_tensor_slices(self.global_cond)
         if delete:
             del self.X, self.global_cond, self.mask

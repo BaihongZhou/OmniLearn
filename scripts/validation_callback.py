@@ -13,11 +13,9 @@ except ImportError or ModuleNotFoundError:
     from dummy_hvd import hvd as hvd
 
 
-def evaluate_distribution(pred_nu, truth_nu, epoch, logger=None):
+def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None):
     if hvd.rank() == 0:
         import wandb
-
-    save_plots = (epoch % 15 == 0)
 
     results = {}
 
@@ -268,13 +266,15 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         if hvd.rank() == 0:
             import wandb
 
+            save_plots = (epoch % self.eval_every == 0)
+
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Total events: {len(tautau_pred.pt)}")
 
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
-            results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger)
-            if epoch % self.eval_every == 0:
+            results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger, save_plots=save_plots)
+            if save_plots:
                 log_vector_distribution(
                     tautau_pred, tautau_truth,
                     name="tautau", epoch=epoch,

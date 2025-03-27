@@ -132,8 +132,8 @@ def process_data(
                     'pt': np.expm1(array_data[:, 0]),
                     'eta': array_data[:, 1],
                     'phi': array_data[:, 2],
-                    # 'mass': np.zeros(array_data.shape[0]),
-                    'energy': np.expm1(array_data[:, 3]),
+                    'mass': np.zeros(array_data.shape[0]),
+                    # 'energy': np.expm1(array_data[:, 3]),
                 }).to_pxpypzenergy()
             else:
                 data[key] = vector.array({
@@ -143,16 +143,6 @@ def process_data(
                     'mass': array_data[:, 3],
                 }).to_pxpypzenergy()
 
-    # if sum_columns is not None:
-    #     for key in sum_columns:
-    #         for col in sum_columns[key]:
-    #             if key not in data:
-    #                 data[key] = data[col]
-    #             else:
-    #                 data[key] += data[col]
-
-    # data['reco_nu1'] = data['truth_nu1']
-    # data['reco_nu2'] = data['truth_nu2']
 
     data['reco_Tau1'] = data['Tau1'] + data['reco_nu1']
     data['reco_Tau2'] = data['Tau2'] + data['reco_nu2']
@@ -192,7 +182,7 @@ def read_variable(files: dict, var: str, weight: str = 'weight'):
 
 if __name__ == '__main__':
 
-    tag = 'Output.nersc.gamma_only/data.2'
+    tag = 'Output.nersc.gamma_only/data.1'
     # tag = 'Output'
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')

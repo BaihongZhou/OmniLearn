@@ -57,8 +57,6 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     met_balance_1 = met.pt / (tau1.pt + 1e-6)
     met_balance_2 = met.pt / (tau2.pt + 1e-6)
 
-    sumMETTautau = (met + tau1 + tau2).to_pxpypzenergy()
-
     all_inputs = {
         "met_pt": np.log1p(met.pt),
         "met_phi": met.phi,
@@ -115,6 +113,57 @@ def calculate_correlations(cond_vec, nu, input_names):
     for i, name in enumerate(names):
         corr = np.corrcoef(truth_nu2_pt, cond_vec[:, i])[0, 1]
         print(f"  {name:20}: {corr:.3f}")
+
+
+def build_extra_targets(
+        data,
+        x1_name: str = 'Tau1',
+        x2_name: str = 'Tau2',
+        met_name: str = 'met',
+        truth_name: str = 'truth_TauTau'
+):
+    x1 = vector.arr({
+        "pt": data[x1_name][:, 0],
+        "eta": data[x1_name][:, 1],
+        "phi": data[x1_name][:, 2],
+        "mass": data[x1_name][:, 3]
+    }).to_pxpypzenergy()
+    x2 = vector.arr({
+        "pt": data[x2_name][:, 0],
+        "eta": data[x2_name][:, 1],
+        "phi": data[x2_name][:, 2],
+        "mass": data[x2_name][:, 3]
+    }).to_pxpypzenergy()
+    met = vector.arr({
+        "pt": data[met_name][:, 0],
+        "phi": data[met_name][:, 1],
+        "eta": np.zeros_like(data[met_name][:, 0]),
+        "mass": np.zeros_like(data[met_name][:, 0])
+    }).to_pxpypzenergy()
+    truth_sum = vector.arr({
+        "pt": data[truth_name][:, 0],
+        "eta": data[truth_name][:, 1],
+        "phi": data[truth_name][:, 2],
+        "mass": data[truth_name][:, 3]
+    }).to_pxpypzenergy()
+
+    sum_metx1x2 = met + x1 + x2
+
+    # diff = np.array([
+    #     truth_sum.px - sum_metx1x2.px,
+    #     truth_sum.py - sum_metx1x2.py,
+    #     truth_sum.pz - sum_metx1x2.pz,
+    #     truth_sum.energy - sum_metx1x2.energy
+    # ])
+
+    diff = np.array([
+        truth_sum.pt,
+        truth_sum.eta,
+        truth_sum.phi,
+        truth_sum.energy,
+    ])
+
+    return diff.T
 
 
 def process(
@@ -215,6 +264,9 @@ def process(
 
                     X.setdefault(particle, []).append(np.hstack(particle_features))
 
+            diff = build_extra_targets(data)
+            nu.setdefault('diff', []).append(diff)
+
     X = np.concatenate([np.vstack(parts)[:, None, :] for parts in X.values()], axis=1)
     nu = np.concatenate([np.vstack(parts) for parts in nu.values()], axis=1)
     y = np.vstack(y)
@@ -254,6 +306,8 @@ def process(
     nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
     nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
     nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
+    nu[:, 8] = np.log1p(nu[:, 8])  # truth TauTau pt
+    nu[:, 11] = np.log1p(nu[:, 11])  # truth TauTau energy
 
     if for_training:
         # Indices to compute mean and std

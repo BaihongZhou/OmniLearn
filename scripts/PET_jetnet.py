@@ -61,7 +61,7 @@ class PET_jetnet(keras.Model):
             num_adv_classes=3,
             num_steps=100,
 
-            rho=3.0,
+            rho=7.0,
             P_mean=-1.2,
             P_std=1.2,
             sigma_data=0.5,

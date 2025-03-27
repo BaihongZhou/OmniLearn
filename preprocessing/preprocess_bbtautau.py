@@ -57,19 +57,21 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     met_balance_1 = met.pt / (tau1.pt + 1e-6)
     met_balance_2 = met.pt / (tau2.pt + 1e-6)
 
+    sumMETTautau = (met + tau1 + tau2).to_pxpypzenergy()
+
     all_inputs = {
         "met_pt": np.log1p(met.pt),
         "met_phi": met.phi,
         # "N_jets": N_jets,
-        "HT_Tau": np.log1p(HT_Tau),
-        "MET_sig_tau": np.log1p(MET_sig_tau),
+        # "HT_Tau": np.log1p(HT_Tau),
+        # "MET_sig_tau": np.log1p(MET_sig_tau),
         # "tau1_pt": tau1_pt,
         # "tau2_pt": tau2_pt,
         # "deltaR_tau": deltaR_tau,
         # "met_deltaphi_tau1": met_deltaphi_tau1,
         # "met_deltaphi_tau2": met_deltaphi_tau2,
-        "HT_Jet": np.log1p(HT_Jet),
-        "MET_sig_jet": np.log1p(MET_sig_jet),
+        # "HT_Jet": np.log1p(HT_Jet),
+        # "MET_sig_jet": np.log1p(MET_sig_jet),
 
         # "met_balance": met_balance,
         # "met_balance_1": met_balance_1,
@@ -94,6 +96,7 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
 
     condition_vector = np.stack([v for v in selected_inputs.values()], axis=1)
     all_inputs_name = list(selected_inputs.keys())
+
     return condition_vector, all_inputs_name
 
 

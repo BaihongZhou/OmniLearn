@@ -165,7 +165,8 @@ class TauReconDataLoader(DataLoader):
                                 f"  [{idx}] {index_to_filename[idx]} -> mean weight: {avg_weight:.3f}, N = {len(assigned_weights)}")
 
             # self.weight = event_weight * sample_weight
-            self.weight = sample_weight
+            self.weight = event_weight
+            # self.weight = sample_weight
         else:
             self.weight = None
 

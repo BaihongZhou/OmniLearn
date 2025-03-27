@@ -72,9 +72,9 @@ class PET_jetnet(keras.Model):
         self.ema = 0.999
         self.shape = (-1, 1, 1)
 
-        self.sigma_min = 0.002
-        self.sigma_max = 80.0
-        self.rho = 7.0
+        self.sigma_max = 1.0  # noise matches data scale
+        self.sigma_min = 0.01  # small but not vanishing
+        self.rho = 3.0  # better balance between low and high noise
 
         # self.adv_model = ProcessDiscriminator(input_dim=self.num_jet, num_processes=num_adv_classes)
         # self.adv_loss_tracker = keras.metrics.Mean(name="adv_loss")
@@ -235,14 +235,12 @@ class PET_jetnet(keras.Model):
             rho = self.rho
 
             u = tf.random.uniform((batch_size, 1))
-            sigma = sigma_max * (sigma_min / sigma_max) ** (u ** (1 / rho))
-            logsnr = self.logsnr_from_sigma(sigma)
-            alpha = tf.sqrt(tf.math.sigmoid(logsnr))
-            sigma = tf.sqrt(tf.math.sigmoid(-logsnr))
+            sigma = self.sigma_max * (self.sigma_min / self.sigma_max) ** (u ** (1 / self.rho))
             t = tf.math.log(sigma + 1e-5)
 
             eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-            perturbed_x = alpha * x['input_jet'] + eps * sigma
+            perturbed_x = x['input_jet'] + sigma * eps
+            v_jet = -sigma * eps
 
             v_pred = self.model_part([
                 x['input_features'],
@@ -250,7 +248,7 @@ class PET_jetnet(keras.Model):
                 x['input_mask'],
                 perturbed_x, t, y
             ])
-            v_jet = alpha * eps - sigma * x['input_jet']
+            # v_jet = alpha * eps - sigma * x['input_jet']
 
             # Base diffusion loss
             loss = tf.reduce_mean(tf.square(v_pred - v_jet))
@@ -309,14 +307,12 @@ class PET_jetnet(keras.Model):
         rho = self.rho
 
         u = tf.random.uniform((batch_size, 1))
-        sigma = sigma_max * (sigma_min / sigma_max) ** (u ** (1 / rho))
-        logsnr = self.logsnr_from_sigma(sigma)
-        alpha = tf.sqrt(tf.math.sigmoid(logsnr))
-        sigma = tf.sqrt(tf.math.sigmoid(-logsnr))
+        sigma = self.sigma_max * (self.sigma_min / self.sigma_max) ** (u ** (1 / self.rho))
         t = tf.math.log(sigma + 1e-5)
 
         eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-        perturbed_x = alpha * x['input_jet'] + eps * sigma
+        perturbed_x = x['input_jet'] + sigma * eps
+        v_jet = -sigma * eps
 
         v_pred = self.model_part([
             x['input_features'],
@@ -324,7 +320,7 @@ class PET_jetnet(keras.Model):
             x['input_mask'],
             perturbed_x, t, y
         ])
-        v_jet = alpha * eps - sigma * x['input_jet']
+        # v_jet = alpha * eps - sigma * x['input_jet']
 
         # Reconstruction loss
         loss = tf.reduce_mean(tf.square(v_pred - v_jet))
@@ -578,7 +574,9 @@ class PET_jetnet(keras.Model):
             d = model_head([v, x, mask, t, cond], training=False)
 
             dt = sigma_next - sigma
-            x_pred = x + d * dt
+            # 🧪 Euler-only step (skip Heun)
+            x = x + d * dt
+            x_pred = x
 
             if i + 1 < num_steps:
                 log_sigma_next = tf.math.log(sigma_next + 1e-5)

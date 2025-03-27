@@ -198,8 +198,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
 
         num_nu = 3
 
-        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu,
-                                                                                          4)  # shape: (N, 6)
+        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu, 4)
         truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, num_nu, 4)
 
         # Convert vector arrays to plain numpy before allgather
@@ -219,13 +218,13 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "pt": tau1_array[:, 0],
             "eta": tau1_array[:, 1],
             "phi": tau1_array[:, 2],
-            "energy": tau1_array[:, 3],
+            "mass": tau1_array[:, 3],
         })
         tau2 = vector.arr({
             "pt": tau2_array[:, 0],
             "eta": tau2_array[:, 1],
             "phi": tau2_array[:, 2],
-            "energy": tau2_array[:, 3],
+            "mass": tau2_array[:, 3],
         })
         truth_tautau = vector.arr({
             "pt": truth_tautau_array[:, 0],

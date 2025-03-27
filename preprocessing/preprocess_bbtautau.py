@@ -321,7 +321,7 @@ def process(
             particle_mean[idx] = np.mean(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
             particle_std[idx] = np.std(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
 
-        selected_indices = [0, 3, 4, 7]
+        selected_indices = [0, 3, 4, 7] + [8, 9, 10, 11]
         nu_mean = np.zeros(nu.shape[1])
         nu_std = np.ones(nu.shape[1])
         for idx in selected_indices:

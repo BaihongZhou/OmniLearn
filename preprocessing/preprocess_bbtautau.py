@@ -274,31 +274,33 @@ def process(
     Extra = np.vstack(Extra)
     weight = np.vstack(weight)
 
-    jet_start_index = len(features['tau_vis']['particles'])
+    if not features['jet'].get('drop', False):
+        jet_start_index = len(features['tau_vis']['particles'])
+        if features['jet'].get('merge_jet', False):
+            mask = X[:, jet_start_index:, 0] > 0
+            valid_counts = np.maximum(mask.sum(axis=1), 1)
+            sum_pt = np.where(mask, X[:, jet_start_index:, 0], 0).sum(axis=1)
+            sum_eta = np.where(mask, X[:, jet_start_index:, 1], 0).sum(axis=1)
+            sum_phi = np.where(mask, X[:, jet_start_index:, 2], 0).sum(axis=1)
+            sum_E = np.where(mask, X[:, jet_start_index:, 3], 0).sum(axis=1)
 
-    if features['jet'].get('merge_jet', False):
-        mask = X[:, jet_start_index:, 0] > 0
-        valid_counts = np.maximum(mask.sum(axis=1), 1)
-        sum_pt = np.where(mask, X[:, jet_start_index:, 0], 0).sum(axis=1)
-        sum_eta = np.where(mask, X[:, jet_start_index:, 1], 0).sum(axis=1)
-        sum_phi = np.where(mask, X[:, jet_start_index:, 2], 0).sum(axis=1)
-        sum_E = np.where(mask, X[:, jet_start_index:, 3], 0).sum(axis=1)
+            X[:, jet_start_index, :4] = np.stack([
+                sum_pt / valid_counts,
+                sum_eta / valid_counts,
+                sum_phi / valid_counts,
+                sum_E / valid_counts
+            ], axis=-1)
+            X = X[:, :jet_start_index + 1]
 
-        X[:, jet_start_index, :4] = np.stack([
-            sum_pt / valid_counts,
-            sum_eta / valid_counts,
-            sum_phi / valid_counts,
-            sum_E / valid_counts
-        ], axis=-1)
-        X = X[:, :jet_start_index + 1]
-
-    # calculating MET-jet related variables for conditioning
-    # Extract jets from X
-    # Assuming first 2 particles = tau_vis → jets start from index 2
-    jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
-    tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
-    y, input_names = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y)
-    calculate_correlations(y, nu, input_names)
+        # calculating MET-jet related variables for conditioning
+        # Extract jets from X
+        # Assuming first 2 particles = tau_vis → jets start from index 2
+        jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
+        tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
+        y, input_names = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y)
+        calculate_correlations(y, nu, input_names)
+    else:
+        X = X[:, :len(features['tau_vis']['particles'])]
 
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt

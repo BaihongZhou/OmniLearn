@@ -7,7 +7,7 @@ preprocess:
     raw_folder: "./RawData"
     processed_folder: &processed_folder "./NumpyData"
     sample_list:
-#      - "hhttbbSM_eval.pkl"
+      - "hhttbbSM_eval.pkl"
       - "ytautau_eval.pkl"
   evaluation:
     for_training: false
@@ -17,7 +17,7 @@ preprocess:
     split_save: true
     sample_list:
       - "hhttbbSM_eval.pkl"
-#      - "ytautau_eval.pkl"
+      - "ytautau_eval.pkl"
 
 sample:
   base_folder: *processed_folder
@@ -58,6 +58,7 @@ features:
     kinematic: [ "pt", "eta", "phi", "energy" ]
     extra: [ ]
     merge_jet: true
+    drop: true
     particles:
       - Jet_b1
       - Jet_b2
@@ -73,9 +74,9 @@ features:
   weight:
     event: "weight_mc"
     sample:
-      hhttbbSM: 1.0
+      hhttbbSM: 0.3
       ytautau: 1.0
-      Ztt: 1.0
+      Ztt: 0.3
       ttbar_dilep: 0.0
       VBFhhttbbSM_: 0.0
   extra:
@@ -134,3 +135,4 @@ model:
   fine_tune: false
   use_mean: false
   lambda_adv: 0.5
+  num_steps: 50

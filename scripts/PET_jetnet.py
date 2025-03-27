@@ -233,9 +233,13 @@ class PET_jetnet(keras.Model):
             )
             target = x_clean
 
-            loss = tf.reduce_mean(loss_weight * tf.square(pred - target))
+            per_event_loss = loss_weight * tf.square(pred - target)
+
             if weight is not None:
-                loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
+                weight = tf.expand_dims(weight, axis=-1)
+                loss = tf.reduce_sum(weight * per_event_loss) / tf.reduce_sum(weight)
+            else:
+                loss = tf.reduce_mean(per_event_loss)
 
             # Safely record scalar stats
             sigma_max_batch = tf.reduce_max(sigma)

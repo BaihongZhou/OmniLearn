@@ -88,10 +88,10 @@ class PET_jetnet(keras.Model):
         self.P_mean = P_mean
         self.P_std = P_std
         self.sigma_data = sigma_data
-        self.S_churn = S_churn,
-        self.S_min = S_min,
-        self.S_max = float('inf'),
-        self.S_noise = S_noise,
+        self.S_churn = S_churn
+        self.S_min = S_min
+        self.S_max = float('inf')
+        self.S_noise = S_noise
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -488,6 +488,11 @@ class PET_jetnet(keras.Model):
             S_max=float('inf'),
             S_noise=1.0
     ):
+        S_churn = float(S_churn)
+        S_min = float(S_min)
+        S_max = float(S_max)
+        S_noise = float(S_noise)
+
         def sigma_schedule(n):
             i = tf.cast(tf.range(n), tf.float64)
             ramp = i / tf.cast(n - 1, tf.float64)

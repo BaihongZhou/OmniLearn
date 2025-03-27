@@ -15,7 +15,7 @@ from wandb.integration.keras import WandbMetricsLogger
 # Custom local imports
 import utils
 from PET_jetnet import PET_jetnet
-from validation_callback import DiffusionValidationCallback
+from validation_callback import DiffusionValidationCallback, SigmaStatsCallback
 
 # Keras imports
 from tensorflow.keras.optimizers import schedules, Lion
@@ -121,6 +121,7 @@ def main():
     optimizer_head = configure_optimizers(train_loader, lr_factor=1)
     model.compile(optimizer_body, optimizer_head)
     callbacks = [
+        # SigmaStatsCallback(model=model),
         EarlyStopping(patience=45, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4),
         DiffusionValidationCallback(
@@ -129,7 +130,7 @@ def main():
             val_dataloader=val_loader,
             eval_every=20,
             extra_list_name=[]
-        )
+        ),
     ]
 
     if hvd.rank() == 0:

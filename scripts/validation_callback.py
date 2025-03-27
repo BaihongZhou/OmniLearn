@@ -286,3 +286,20 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             wandb.log(results)
 
         _ = hvd.allreduce(tf.constant(0.0))
+
+
+class SigmaStatsCallback(tf.keras.callbacks.Callback):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def on_epoch_end(self, epoch, logs=None):
+        all_sigmas = tf.concat(self.model.collected_sigmas, axis=0)
+        sigma_min_val = tf.reduce_min(all_sigmas).numpy()
+        sigma_max_val = tf.reduce_max(all_sigmas).numpy()
+
+        print(f"[Epoch {epoch}] σ_min: {sigma_min_val:.4f}, σ_max: {sigma_max_val:.4f}")
+
+        self.model.sigma_min = min(self.model.sigma_min, float(sigma_min_val))
+        self.model.sigma_max = max(self.model.sigma_max, float(sigma_max_val))
+        self.model.collected_sigmas.clear()

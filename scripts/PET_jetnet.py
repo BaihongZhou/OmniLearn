@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
@@ -72,20 +74,12 @@ class PET_jetnet(keras.Model):
         self.ema = 0.999
         self.shape = (-1, 1, 1)
 
-        self.sigma_max = 1.0  # noise matches data scale
-        self.sigma_min = 0.01  # small but not vanishing
+        self.sigma_max = -np.inf
+        self.sigma_min = np.inf
         self.rho = 3.0  # better balance between low and high noise
-
-        # self.adv_model = ProcessDiscriminator(input_dim=self.num_jet, num_processes=num_adv_classes)
-        # self.adv_loss_tracker = keras.metrics.Mean(name="adv_loss")
-        # self.num_adv_classes = num_adv_classes
-        # self.adv_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)  # Or Lion if you like
-        # self.lambda_adv_schedule = PolynomialDecay(
-        #     initial_learning_rate=0.0,
-        #     decay_steps=50000,  # total steps or estimated steps
-        #     end_learning_rate=lambda_adv,
-        #     power=1.0  # linear ramp-up
-        # )
+        self.P_mean = -1.2
+        self.P_std = 1.2
+        self.sigma_data = 0.5
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -148,6 +142,9 @@ class PET_jetnet(keras.Model):
 
         # Add this to __init__:
         self.sigma_tracker = tf.keras.metrics.Mean(name="sigma_mean")
+        self.collected_sigmas = []
+
+        self.logger = logging.getLogger(__name__)
 
     @property
     def metrics(self):
@@ -170,78 +167,81 @@ class PET_jetnet(keras.Model):
     def prior_sde(self, dimensions):
         return tf.random.normal(dimensions, dtype=tf.float32)
 
+    def _update_sigma_range(self, sigma_min_val, sigma_max_val):
+        sigma_min_val = float(sigma_min_val.numpy())
+        sigma_max_val = float(sigma_max_val.numpy())
+        self.sigma_min = min(self.sigma_min, sigma_min_val)
+        self.sigma_max = max(self.sigma_max, sigma_max_val)
+
+    def edm_preconditioned_network(self, model_part, x_noisy, sigma, features, points, mask, cond):
+
+        c_skip = self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2)
+        c_out = sigma * self.sigma_data / tf.sqrt(sigma ** 2 + self.sigma_data ** 2)
+        c_in = 1.0 / tf.sqrt(self.sigma_data ** 2 + sigma ** 2)
+        c_noise = tf.math.log(sigma + 1e-5) / 4.0
+
+        model_input = c_in * x_noisy
+        model_time = c_noise
+
+        v_pred = model_part([
+            features,
+            points,
+            mask,
+            model_input, model_time, cond
+        ])
+        return c_skip * x_noisy + c_out * v_pred
+
     def train_step(self, inputs):
         x, y = inputs
         batch_size = tf.shape(x['input_jet'])[0]
         weight = x['input_weight']
 
-        raw_file = x['input_file']
-        # raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
+        P_mean = self.P_mean
+        P_std = self.P_std
+        sigma_data = self.sigma_data
 
         with tf.GradientTape(persistent=True) as tape:
-            # Diffusion training
-            # t = tf.random.uniform((batch_size, 1))
-            # logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
-
-            sigma_min = self.sigma_min
-            sigma_max = self.sigma_max
-            rho = self.rho
-
-            u = tf.random.uniform((batch_size, 1))
-            sigma = self.sigma_max * (self.sigma_min / self.sigma_max) ** (u ** (1 / self.rho))
-            t = tf.math.log(sigma + 1e-5)
+            rnd_normal = tf.random.normal((batch_size, 1), dtype=tf.float32)
+            sigma = tf.exp(rnd_normal * P_std + P_mean)
+            sigma = tf.cast(sigma, tf.float32)
+            loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
 
             eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-            perturbed_x = x['input_jet'] + sigma * eps
-            v_jet = -sigma * eps
+            x_clean = x['input_jet']
+            x_noisy = x_clean + sigma * eps
 
-            v_pred = self.model_part([
+            pred = self.edm_preconditioned_network(
+                self.model_part,
+                x_noisy,
+                sigma,
                 x['input_features'],
                 x['input_points'],
                 x['input_mask'],
-                perturbed_x, t, y
-            ])
-            # v_jet = alpha * eps - sigma * x['input_jet']
+                y
+            )
+            target = x_clean
 
-            # Base diffusion loss
-            loss = tf.reduce_mean(tf.square(v_pred - v_jet))
+            loss = tf.reduce_mean(loss_weight * tf.square(pred - target))
             if weight is not None:
                 loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
 
-            # Adversarial training
-            # process_logits = self.adv_model(tf.stop_gradient(v_pred))
-            # adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
-            # adv_loss = tf.reduce_mean(adv_loss)
-            #
-            # current_step = tf.cast(self.optimizer.iterations, tf.float32)
-            # lambda_adv = self.lambda_adv_schedule(current_step)
+            # Safely record scalar stats
+            sigma_max_batch = tf.reduce_max(sigma)
+            sigma_min_batch = tf.reduce_min(sigma)
+            tf.py_function(self._update_sigma_range, [sigma_min_batch, sigma_max_batch], [])
 
-            total_loss = loss  # - lambda_adv * adv_loss
+            total_loss = loss
 
-        # Update generator (PET)
         self.body_optimizer.minimize(total_loss, self.body.trainable_variables, tape=tape)
         self.optimizer.minimize(total_loss, self.head.trainable_variables, tape=tape)
 
-        # Update adversary
-        # with tf.GradientTape() as adv_tape:
-        #     process_logits = self.adv_model(v_pred)
-        #     adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, process_logits)
-        #     adv_loss = tf.reduce_mean(adv_loss)
-        #
-        # adv_grads = adv_tape.gradient(adv_loss, self.adv_model.trainable_variables)
-        # self.adv_optimizer.apply_gradients(zip(adv_grads, self.adv_model.trainable_variables))
-
-        # Update logs
-        self.loss_tracker.update_state(loss)
-        # self.adv_loss_tracker.update_state(adv_loss)
-        self.sigma_tracker.update_state(tf.reduce_mean(sigma))
-
-        # EMA update
         for weight, ema_weight in zip(self.head.weights, self.ema_head.weights):
             ema_weight.assign(self.ema * ema_weight + (1 - self.ema) * weight)
-
         for weight, ema_weight in zip(self.body.weights, self.ema_body.weights):
             ema_weight.assign(self.ema * ema_weight + (1 - self.ema) * weight)
+
+        self.loss_tracker.update_state(loss)
+        self.sigma_tracker.update_state(sigma)
 
         return {m.name: m.result() for m in self.metrics}
 
@@ -250,47 +250,36 @@ class PET_jetnet(keras.Model):
         batch_size = tf.shape(x['input_jet'])[0]
         weight = x['input_weight']
 
-        raw_file = x['input_file']
-        # raw_file_onehot = tf.one_hot(tf.cast(raw_file, tf.int32), depth=self.num_adv_classes)
+        P_mean = self.P_mean
+        P_std = self.P_std
+        sigma_data = self.sigma_data
 
-        # t = tf.random.uniform((batch_size, 1))
-        # logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
-
-        sigma_min = self.sigma_min
-        sigma_max = self.sigma_max
-        rho = self.rho
-
-        u = tf.random.uniform((batch_size, 1))
-        sigma = self.sigma_max * (self.sigma_min / self.sigma_max) ** (u ** (1 / self.rho))
-        t = tf.math.log(sigma + 1e-5)
+        rnd_normal = tf.random.normal((batch_size, 1), dtype=tf.float32)
+        sigma = tf.exp(rnd_normal * P_std + P_mean)
+        sigma = tf.cast(sigma, tf.float32)
+        loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
 
         eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-        perturbed_x = x['input_jet'] + sigma * eps
-        v_jet = -sigma * eps
+        x_clean = x['input_jet']
+        x_noisy = x_clean + sigma * eps
 
-        v_pred = self.model_part([
+        pred = self.edm_preconditioned_network(
+            self.model_part,
+            x_noisy,
+            sigma,
             x['input_features'],
             x['input_points'],
             x['input_mask'],
-            perturbed_x, t, y
-        ])
-        # v_jet = alpha * eps - sigma * x['input_jet']
+            y
+        )
+        target = x_clean
 
-        # Reconstruction loss
-        loss = tf.reduce_mean(tf.square(v_pred - v_jet))
+        loss = tf.reduce_mean(loss_weight * tf.square(pred - target))
         if weight is not None:
             loss = tf.reduce_sum(weight * loss) / tf.reduce_sum(weight)
 
         self.loss_tracker.update_state(loss)
-        self.sigma_tracker.update_state(tf.reduce_mean(sigma))
-
-        # Optional: track adversarial loss during test
-        # if raw_file is not None:
-        #     adv_pred = self.adv_model(v_pred)
-        #     adv_loss = tf.keras.losses.categorical_crossentropy(raw_file_onehot, adv_pred)
-        #     adv_loss = tf.reduce_mean(adv_loss)
-        #     self.adv_loss_tracker.update_state(adv_loss)
-
+        self.sigma_tracker.update_state(sigma)
         return {m.name: m.result() for m in self.metrics}
 
     def call(self, x):
@@ -313,6 +302,8 @@ class PET_jetnet(keras.Model):
         point_split = np.array_split(points, nsplit)
         cond_split = np.array_split(cond, nsplit)
 
+        self.logger.info(f"Max sigma: {self.sigma_max}, Min sigma: {self.sigma_min}")
+
         # iterable = tqdm(splits,desc='Processing Splits',total=len(splits)) if use_tqdm else splits
         for i in tqdm(range(nsplit), desc='Processing Splits') if use_tqdm else range(nsplit):
 
@@ -323,30 +314,19 @@ class PET_jetnet(keras.Model):
 
             jet_candidate = []
             for _ in range(candidate):
-                # jet = self.DDPMSampler(part,point,mask,cond,
-                #                        [self.ema_body,self.ema_head],
-                #                        data_shape=[part.shape[0],self.num_jet],
-                #                        w = 0.0,
-                #                        num_steps = self.num_steps,
-                #                        const_shape = [-1,1]).numpy()
-                # jet = self.DDIMSampler(
-                #     part, point, mask, cond,
-                #     [self.ema_body, self.ema_head],
-                #     data_shape=[part.shape[0], self.num_jet],
-                #     w=0.0,
-                #     num_steps=self.num_steps,
-                #     const_shape=[-1, 1]
-                # ).numpy()
-                jet = self.EDMSampler(
-                    part, point, mask, cond,
-                    [self.ema_body, self.ema_head],
-                    data_shape=[part.shape[0], self.num_jet],
+                jet = self.edm_sampler(
+                    part=part,
+                    point=point,
+                    mask=mask,
+                    cond=cond,
+                    model_part=self.model_part,
+                    data_shape=(part.shape[0], self.num_jet),
                     num_steps=self.num_steps,
-                    const_shape=[-1, 1],
-                    sigma_max=self.sigma_max,
                     sigma_min=self.sigma_min,
-                    rho=self.rho
+                    sigma_max=self.sigma_max,
+                    rho=self.rho,
                 ).numpy()
+
                 jet_candidate.append(jet)
 
             total_jets = np.concatenate(jet_candidate, 1)
@@ -364,18 +344,6 @@ class PET_jetnet(keras.Model):
         a = tf.math.atan(tf.exp(-0.5 * logsnr_min)) - b
         return tf.math.atan(tf.exp(-0.5 * tf.cast(logsnr, tf.float32))) / a - b / a
 
-    # def get_logsnr_alpha_sigma(self, time, shape=None):
-    #     logsnr = self.logsnr_schedule_cosine(time)
-    #     alpha = tf.sqrt(tf.math.sigmoid(logsnr))
-    #     sigma = tf.sqrt(tf.math.sigmoid(-logsnr))
-    #
-    #     if shape is not None:
-    #         alpha = tf.reshape(alpha, shape)
-    #         sigma = tf.reshape(sigma, shape)
-    #         logsnr = tf.reshape(logsnr, shape)
-    #
-    #     return logsnr, tf.cast(alpha, tf.float32), tf.cast(sigma, tf.float32)
-
     def get_logsnr_alpha_sigma(self, sigma, shape=None):
         logsnr = -tf.math.log(tf.square(sigma))
         alpha = tf.sqrt(tf.math.sigmoid(logsnr))
@@ -387,9 +355,6 @@ class PET_jetnet(keras.Model):
             logsnr = tf.reshape(logsnr, shape)
 
         return logsnr, tf.cast(alpha, tf.float32), tf.cast(sigma, tf.float32)
-
-    def logsnr_from_sigma(self, sigma):
-        return -tf.math.log(tf.square(sigma))  # log(SNR) = -log(σ²)
 
     @tf.function
     def DDPMSampler(self,
@@ -493,53 +458,59 @@ class PET_jetnet(keras.Model):
         return x  # Return the final sample
 
     @tf.function
-    def EDMSampler(
+    def edm_sampler(
             self,
             part, point, mask, cond,
-            model,
+            model_part,
             data_shape=None,
-            const_shape=None,
-            sigma_max=80.0,
+            num_steps=18,
             sigma_min=0.002,
+            sigma_max=80.0,
             rho=7.0,
-            num_steps=18
+            S_churn=0.0,
+            S_min=0.0,
+            S_max=float('inf'),
+            S_noise=1.0
     ):
         def sigma_schedule(n):
-            i = tf.range(n, dtype=tf.float32)
-            ramp = i / (n - 1)
+            i = tf.cast(tf.range(n), tf.float64)
+            ramp = i / tf.cast(n - 1, tf.float64)
             inv_rho = 1.0 / rho
-            return tf.convert_to_tensor(
-                (sigma_max ** inv_rho + ramp * (sigma_min ** inv_rho - sigma_max ** inv_rho)) ** rho,
-                dtype=tf.float32
-            )
+            sigmas = (sigma_max ** inv_rho + ramp * (sigma_min ** inv_rho - sigma_max ** inv_rho)) ** rho
+            return tf.concat([sigmas, tf.zeros_like(sigmas[:1])], axis=0)
 
-        batch_size = cond.shape[0]
-        x = tf.random.normal(data_shape, dtype=tf.float32) * sigma_max
         sigmas = sigma_schedule(num_steps)
+        sigmas = tf.cast(sigmas, tf.float32)
 
-        model_body, model_head = model
+        batch_size = tf.shape(cond)[0]
+        x_next = tf.random.normal(data_shape, dtype=tf.float32) * sigmas[0]
 
         for i in tf.range(num_steps):
-            sigma = tf.reshape(sigmas[i], const_shape)
-            sigma_next = tf.reshape(sigmas[i + 1] if i + 1 < num_steps else 0.0, const_shape)
+            t_cur = sigmas[i]
+            t_next = sigmas[i + 1]
 
-            log_sigma = tf.math.log(sigma + 1e-5)
-            t = tf.ones([batch_size, 1], dtype=tf.float32) * tf.reshape(log_sigma, [])
-            v = model_body([part, point, mask, t], training=False)
-            d = model_head([v, x, mask, t, cond], training=False)
+            gamma = tf.where(
+                (t_cur >= S_min) & (t_cur <= S_max),
+                tf.minimum(S_churn / num_steps, tf.sqrt(2.0) - 1.0),
+                0.0
+            )
 
-            dt = sigma_next - sigma
-            # 🧪 Euler-only step (skip Heun)
-            x = x + d * dt
-            x_pred = x
+            t_hat_scalar = t_cur + gamma * t_cur
+            t_hat = tf.ones((batch_size, 1), dtype=tf.float32) * tf.reshape(t_hat_scalar, [])
 
-            if i + 1 < num_steps:
-                log_sigma_next = tf.math.log(sigma_next + 1e-5)
-                t_next = tf.ones([batch_size, 1], dtype=tf.float32) * tf.reshape(log_sigma_next, [])
-                v_next = model_body([part, point, mask, t_next], training=False)
-                d_next = model_head([v_next, x_pred, mask, t_next, cond], training=False)
-                x = x + 0.5 * (d + d_next) * dt
-            else:
-                x = x_pred
+            x_cur = x_next
+            x_hat = x_cur + tf.sqrt(t_hat_scalar ** 2 - t_cur ** 2) * S_noise * tf.random.normal(data_shape,
+                                                                                                 dtype=tf.float32)
 
-        return x
+            denoised = self.edm_preconditioned_network(model_part, x_hat, t_hat, part, point, mask, cond)
+            d_cur = (x_hat - denoised) / t_hat_scalar
+            x_next = x_hat + (t_next - t_hat_scalar) * d_cur
+
+            if i < num_steps - 1:
+                t_next_batch = tf.ones((batch_size, 1), dtype=tf.float32) * tf.reshape(t_next, [])
+                denoised_next = self.edm_preconditioned_network(model_part, x_next, t_next_batch, part, point, mask,
+                                                                cond)
+                d_prime = (x_next - denoised_next) / t_next
+                x_next = x_hat + (t_next - t_hat_scalar) * (0.5 * d_cur + 0.5 * d_prime)
+
+        return x_next

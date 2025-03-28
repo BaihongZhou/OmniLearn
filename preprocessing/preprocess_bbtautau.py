@@ -301,6 +301,7 @@ def process(
         calculate_correlations(y, nu, input_names)
     else:
         X = X[:, :len(features['tau_vis']['particles'])]
+        calculate_correlations(y, nu, ["met_pt", "met_phi"])
 
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt

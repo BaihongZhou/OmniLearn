@@ -44,7 +44,7 @@ def get_bin_edges_from_signal(
         data,
         column,
         bins=50,
-        plot_sig_percentile=(5, 95),
+        plot_sig_percentile=(0.5, 0.95),
 ):
     """Gets bin edges from the signal sample within a given percentile range."""
     signal_data = []
@@ -56,8 +56,8 @@ def get_bin_edges_from_signal(
         signal_data_combined = np.concatenate(signal_data)
 
         # Compute percentile range
-        lower_cutoff = np.percentile(signal_data_combined, plot_sig_percentile[0])
-        upper_cutoff = np.percentile(signal_data_combined, plot_sig_percentile[1])
+        lower_cutoff = np.percentile(signal_data_combined, plot_sig_percentile[0] * 100)
+        upper_cutoff = np.percentile(signal_data_combined, plot_sig_percentile[1] * 100)
 
         # Filter data within percentile range
         filtered_data = signal_data_combined[

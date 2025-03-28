@@ -17,7 +17,7 @@ def inverse_signed_log1p(y):
     return np.sign(y) * (np.expm1(np.abs(y)))
 
 
-def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None):
+def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None, weights=None):
     if hvd.rank() == 0:
         import wandb
 
@@ -55,7 +55,7 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None):
 
                 # Compute histograms
                 hist_pred, _ = np.histogram(x, bins=bins, density=True)
-                hist_truth, _ = np.histogram(y, bins=bins, density=True)
+                hist_truth, _ = np.histogram(y, bins=bins, density=True, weights=weights)
                 bin_centers = 0.5 * (bins[1:] + bins[:-1])
 
                 # Plot
@@ -78,7 +78,7 @@ def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None):
 
 def log_vector_distribution(
         pred_vec, truth_vec, name, epoch, raw_file=None, raw_file_label_map=None, logger=None,
-        # weight=None
+        weight=None
 ):
     if hvd.rank() == 0:
         import wandb
@@ -93,7 +93,7 @@ def log_vector_distribution(
             mask = (raw_file == proc_id)
             pred = pred_vec[mask]
             truth = truth_vec[mask]
-            # weights = weight[mask]
+            weights = weight[mask]
             label = raw_file_label_map.get(
                 proc_id, f"process_{proc_id}"
             ) if raw_file_label_map else f"process_{proc_id}"
@@ -102,7 +102,7 @@ def log_vector_distribution(
             pred = pred_vec
             truth = truth_vec
             suffix = ""
-            # weights = weight
+            weights = weight
 
         for k in components:
             x_pred = getattr(pred, k)
@@ -121,7 +121,7 @@ def log_vector_distribution(
 
             bins = np.linspace(low, high, 101)
             hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
-            hist_truth, _ = np.histogram(x_truth, bins=bins, density=True)
+            hist_truth, _ = np.histogram(x_truth, bins=bins, density=True, weights=weights)
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
 
             fig, ax = plt.subplots()
@@ -194,10 +194,10 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         extra = self.val_dataloader.extra[:max_events]
         raw_file = self.val_dataloader.raw_file[:max_events]
 
-        # if self.val_dataloader.weight is not None:
-        #     weight = self.val_dataloader.weight[:max_events]
-        # else:
-        #     weight = np.ones_like(raw_file)
+        if self.val_dataloader.weight is not None:
+            weight = self.val_dataloader.weight[:max_events]
+        else:
+            weight = np.ones_like(raw_file)
 
         self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Sampling at epoch {epoch}")
         gen_nu = self.model.generate(
@@ -227,7 +227,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         tau2_array = hvd.allgather(tf.convert_to_tensor(tau2_array)).numpy()
         truth_tautau_array = hvd.allgather(tf.convert_to_tensor(truth_tautau_array)).numpy()
         raw_file = hvd.allgather(tf.convert_to_tensor(raw_file)).numpy()
-        # weight = hvd.allgather(tf.convert_to_tensor(weight)).numpy()
+        weight = hvd.allgather(tf.convert_to_tensor(weight)).numpy()
 
         tau1 = vector.arr({
             "pt": tau1_array[:, 0],
@@ -298,12 +298,12 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
-            results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger, save_plots=save_plots)
+            results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger, save_plots=save_plots, weights=weight)
             if save_plots:
                 log_vector_distribution(
                     tautau_nu_pred, tautau_truth,
                     name="tautau", epoch=epoch,
-                    # weight=weight,
+                    weight=weight,
                     raw_file=raw_file, raw_file_label_map=unique_file_map,
                     logger=self.logger,
                 )
@@ -311,7 +311,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
                 log_vector_distribution(
                     tautau_direct_pred, tautau_truth,
                     name="tautau_predict", epoch=epoch,
-                    # weight=weight,
+                    weight=weight,
                     raw_file=raw_file, raw_file_label_map=unique_file_map,
                     logger=self.logger,
                 )

@@ -21,12 +21,6 @@ def signed_log1p(x):
 
 
 def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
-    jets = vector.arr({
-        "pt": jets[..., 0],
-        "eta": jets[..., 1],
-        "phi": jets[..., 2],
-        "energy": jets[..., 3]
-    })
     taus = vector.arr({
         "pt": taus[..., 0],
         "eta": taus[..., 1],
@@ -47,14 +41,9 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     HT_Tau = tau1.pt + tau2.pt
     deltaR_tau = tau1.deltaR(tau2)
 
-    HT_Jet = np.sum(jets.pt, axis=1)
-    N_jets = np.sum(jets.pt > jet_pt_threshold, axis=1)
-    mean_jet = jets.sum(axis=1) / (N_jets + 1)
-
     met_deltaphi_tau1 = met.deltaphi(tau1)
     met_deltaphi_tau2 = met.deltaphi(tau2)
 
-    MET_sig_jet = met.pt / np.sqrt(HT_Jet + 1e-6)
     MET_sig_tau = met.pt / np.sqrt(HT_Tau + 1e-6)
 
     met_balance = met.pt / (tau1.pt + tau2.pt + 1e-6)
@@ -64,18 +53,17 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     all_inputs = {
         "met_pt": np.log1p(met.pt),
         "met_phi": met.phi,
-        # "N_jets": N_jets,
-        # "HT_Tau": np.log1p(HT_Tau),
-        # "MET_sig_tau": np.log1p(MET_sig_tau),
+        "HT_Tau": np.log1p(HT_Tau),
+        "MET_sig_tau": np.log1p(MET_sig_tau),
         # "tau1_pt": tau1_pt,
         # "tau2_pt": tau2_pt,
-        # "deltaR_tau": deltaR_tau,
+        "deltaR_tau": deltaR_tau,
         # "met_deltaphi_tau1": met_deltaphi_tau1,
         # "met_deltaphi_tau2": met_deltaphi_tau2,
         # "HT_Jet": np.log1p(HT_Jet),
         # "MET_sig_jet": np.log1p(MET_sig_jet),
 
-        # "met_balance": met_balance,
+        "met_balance": met_balance,
         # "met_balance_1": met_balance_1,
         # "met_balance_2": met_balance_2,
 
@@ -84,6 +72,26 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
         # "mean_jet_phi": mean_jet.phi,
         # "mean_jet_energy": mean_jet.energy,
     }
+
+    if jets is not None:
+        jets = vector.arr({
+            "pt": jets[..., 0],
+            "eta": jets[..., 1],
+            "phi": jets[..., 2],
+            "energy": jets[..., 3]
+        })
+
+        HT_Jet = np.sum(jets.pt, axis=1)
+        N_jets = np.sum(jets.pt > jet_pt_threshold, axis=1)
+        mean_jet = jets.sum(axis=1) / (N_jets + 1)
+        MET_sig_jet = met.pt / np.sqrt(HT_Jet + 1e-6)
+
+        all_inputs.update({
+            "HT_Jet": np.log1p(HT_Jet),
+            "MET_sig_jet": np.log1p(MET_sig_jet),
+            "N_jets": N_jets,
+            "mean_jet_pt": mean_jet.pt,
+        })
 
     def corr(x, y): return np.corrcoef(x, y)[0, 1]
 
@@ -307,7 +315,8 @@ def process(
         calculate_correlations(y, nu, input_names)
     else:
         X = X[:, :len(features['tau_vis']['particles'])]
-        calculate_correlations(y, nu, ["met_pt", "met_phi"])
+        y, input_names = build_condition_vector(jets=None, taus=X, y_met=y)
+        calculate_correlations(y, nu, input_names)
 
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt

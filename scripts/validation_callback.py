@@ -96,6 +96,7 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
             pred = pred_vec
             truth = truth_vec
             suffix = ""
+            weights = weight
 
         for k in components:
             x_pred = getattr(pred, k)
@@ -113,7 +114,7 @@ def log_vector_distribution(pred_vec, truth_vec, name, epoch, raw_file=None, raw
                 low, high = 0, 1000
 
             bins = np.linspace(low, high, 101)
-            hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
+            hist_pred, _ = np.histogram(x_pred, bins=bins, density=True, weights=weights)
             hist_truth, _ = np.histogram(x_truth, bins=bins, density=True, weights=weights)
             bin_centers = 0.5 * (bins[1:] + bins[:-1])
 
@@ -186,7 +187,11 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         )
         extra = self.val_dataloader.extra[:max_events]
         raw_file = self.val_dataloader.raw_file[:max_events]
-        weight = self.val_dataloader.weight[:max_events]
+
+        if self.val_dataloader.weight is not None:
+            weight = self.val_dataloader.weight[:max_events]
+        else:
+            weight = np.ones_like(raw_file)
 
         self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Sampling at epoch {epoch}")
         gen_nu = self.model.generate(

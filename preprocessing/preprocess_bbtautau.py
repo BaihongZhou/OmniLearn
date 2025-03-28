@@ -330,7 +330,7 @@ def process(
     # nu[:, 10] = signed_log1p(nu[:, 10])  # truth_tautau - (tau1 + tau2) pz
     # nu[:, 11] = signed_log1p(nu[:, 11])  # truth_tautau - (tau1 + tau2) energy
 
-    nu[:, 4] = signed_log1p(nu[: 0] - nu[:, 4])  # nu2 pt
+    nu[:, 4] = signed_log1p(nu[:, 0] - nu[:, 4])  # nu2 pt
     nu[:, 5] = nu[:, 1] - nu[:, 5]  # nu2 eta
     nu[:, 6] = nu[:, 2] - nu[:, 6]  # nu2 phi
     nu[:, 7] = signed_log1p(nu[: 3] - nu[:, 7])  # nu2 energy

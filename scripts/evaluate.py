@@ -79,7 +79,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
     )
 
     final_neutrinos = [
-        eval_dataloader.revert_preprocess_neutrino(raw_nu_candidates[:, i]).reshape(-1, 1, 8)
+        eval_dataloader.revert_preprocess_neutrino(raw_nu_candidates[:, i]).reshape(-1, 1, 12)
         for i in range(raw_nu_candidates.shape[1])
     ]
     final_neutrinos = np.concatenate(final_neutrinos, axis=1)
@@ -101,7 +101,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
         if not split:
             data_dict = {
                 'recon_nu1': final_neutrinos[:, :, :4],
-                'recon_nu2': final_neutrinos[:, :, 4:],
+                'recon_nu2': final_neutrinos[:, :, 4:8],
             }
             data_dict.update({
                 f"extra_{i}": extra_info[:, i]
@@ -117,7 +117,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                 mask = raw_file == file_list[file]
                 data_dict = {
                     'nu1': final_neutrinos[mask][:, :, :4],
-                    'nu2': final_neutrinos[mask][:, :, 4:],
+                    'nu2': final_neutrinos[mask][:, :, 4:8],
                 }
                 data_dict.update({
                     f"extra_{i}": extra_info[mask, i]

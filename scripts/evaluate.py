@@ -102,7 +102,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
             data_dict = {
                 'recon_nu1': final_neutrinos[:, :, :4],
                 'recon_nu2': final_neutrinos[:, :, 4:8],
-                'diff': final_neutrinos[mask][:, :, 8:],
+                'diff': final_neutrinos[:, :, 8:],
             }
             data_dict.update({
                 f"extra_{i}": extra_info[:, i]

@@ -165,8 +165,8 @@ class TauReconDataLoader(DataLoader):
                                 f"  [{idx}] {index_to_filename[idx]} -> mean weight: {avg_weight:.3f}, N = {len(assigned_weights)}")
 
             # self.weight = event_weight * sample_weight
-            self.weight = event_weight
-            # self.weight = sample_weight
+            # self.weight = event_weight
+            self.weight = sample_weight
         else:
             self.weight = None
 
@@ -208,8 +208,8 @@ class TauReconDataLoader(DataLoader):
             'input_points': X[:, :, 1:3],
             'input_mask': self.mask.astype(np.float32),
             'input_jet': neutrino,
-            # 'input_weight': self.weight.astype(np.float32),
-            'input_weight': None,
+            'input_weight': self.weight.astype(np.float32),
+            # 'input_weight': None,
             'input_file': self.raw_file.astype(np.int32),
         })
 

@@ -13,6 +13,10 @@ except ImportError or ModuleNotFoundError:
     from dummy_hvd import hvd as hvd
 
 
+def inverse_signed_log1p(y):
+    return np.sign(y) * (np.expm1(np.abs(y)))
+
+
 def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None):
     if hvd.rank() == 0:
         import wandb
@@ -271,10 +275,10 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "energy": np.expm1(pred_nu[:, 1, 3]),
         })
         tautau_diff = vector.arr({
-            "px": np.expm1(pred_nu[:, 2, 0]),
-            "py": np.expm1(pred_nu[:, 2, 1]),
-            "pz": np.expm1(pred_nu[:, 2, 2]),
-            "energy": np.expm1(pred_nu[:, 2, 3]),
+            "px": inverse_signed_log1p(pred_nu[:, 2, 0]),
+            "py": inverse_signed_log1p(pred_nu[:, 2, 1]),
+            "pz": inverse_signed_log1p(pred_nu[:, 2, 2]),
+            "energy": inverse_signed_log1p(pred_nu[:, 2, 3]),
         })
 
         tau1_full = tau1 + nu1

@@ -16,6 +16,10 @@ from configs.global_config import load_config, save_config
 import configs.global_config as config
 
 
+def signed_log1p(x):
+    return np.sign(x) * np.log1p(np.abs(x))
+
+
 def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     jets = vector.arr({
         "pt": jets[..., 0],
@@ -210,6 +214,8 @@ def process(
             n_events = len(data["eventNumber"])
             raw_file.extend(np.array([sample_file_path.stem] * n_events, dtype=object))
 
+            print(f"{n_events} events loaded from {sample_file_path}")
+
             for category, attributes in features.items():
                 if category == 'extra':
                     original_extra = np.column_stack([data[ext] for ext in attributes])
@@ -310,10 +316,10 @@ def process(
     nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
     nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
     nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
-    nu[:, 8] = np.log1p(np.maximum(nu[:, 8], 0))  # truth_tautau - (tau1 + tau2) px
-    nu[:, 9] = np.log1p(np.maximum(nu[:, 9], 0))  # truth_tautau - (tau1 + tau2) py
-    nu[:, 10] = np.log1p(np.maximum(nu[:, 10], 0))  # truth_tautau - (tau1 + tau2) pz
-    nu[:, 11] = np.log1p(np.maximum(nu[:, 11], 0))  # truth_tautau - (tau1 + tau2) energy
+    nu[:, 8] = signed_log1p(nu[:, 8])  # truth_tautau - (tau1 + tau2) px
+    nu[:, 9] = signed_log1p(nu[:, 9])  # truth_tautau - (tau1 + tau2) py
+    nu[:, 10] = signed_log1p(nu[:, 10])  # truth_tautau - (tau1 + tau2) pz
+    nu[:, 11] = signed_log1p(nu[:, 11])  # truth_tautau - (tau1 + tau2) energy
 
     if for_training:
         # Indices to compute mean and std

@@ -233,11 +233,13 @@ class PET_jetnet(keras.Model):
             )
             target = x_clean
 
-            per_event_loss = loss_weight * tf.square(pred - target)
+            per_event_loss = loss_weight * tf.square(pred - target) #(n_event, 8)
             if weight is not None:
                 weight = tf.expand_dims(weight, axis=-1)
-                loss = tf.reduce_sum(weight * per_event_loss) / tf.reduce_sum(weight)
-                # loss = tf.reduce_mean(weight * per_event_loss)
+                # loss = tf.reduce_sum(weight * per_event_loss) # / tf.reduce_sum(weight)
+                loss = tf.reduce_mean(weight * per_event_loss)
+
+                tf.print("weight check: ", weight)
             else:
                 loss = tf.reduce_mean(per_event_loss)
 

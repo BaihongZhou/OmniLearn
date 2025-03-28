@@ -239,7 +239,7 @@ class PET_jetnet(keras.Model):
                 # loss = tf.reduce_sum(weight * per_event_loss) # / tf.reduce_sum(weight)
                 loss = tf.reduce_mean(weight * per_event_loss)
 
-                tf.print("weight check: ", weight)
+                # tf.print("weight check: ", weight)
             else:
                 loss = tf.reduce_mean(per_event_loss)
 

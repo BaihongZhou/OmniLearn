@@ -210,7 +210,7 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             candidate=1,
         )
 
-        num_nu = 3
+        num_nu = 2
 
         pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu, 4)
         truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, num_nu, 4)
@@ -269,22 +269,22 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "energy": np.expm1(pred_nu[:, 0, 3]),
         })
         nu2 = vector.arr({
-            "pt": np.expm1(pred_nu[:, 1, 0]),
-            "eta": pred_nu[:, 1, 1],
-            "phi": pred_nu[:, 1, 2],
-            "energy": np.expm1(pred_nu[:, 1, 3]),
+            "pt": np.expm1(pred_nu[:, 0, 0]) - inverse_signed_log1p(pred_nu[:, 1, 0]) ,
+            "eta": pred_nu[:, 0, 1] - pred_nu[:, 1, 1],
+            "phi": pred_nu[:, 0, 2] - pred_nu[:, 1, 2],
+            "energy":  np.expm1(pred_nu[:, 0, 3]) - inverse_signed_log1p(pred_nu[:, 1, 3]),
         })
-        tautau_diff = vector.arr({
-            "px": inverse_signed_log1p(pred_nu[:, 2, 0]),
-            "py": inverse_signed_log1p(pred_nu[:, 2, 1]),
-            "pz": inverse_signed_log1p(pred_nu[:, 2, 2]),
-            "energy": inverse_signed_log1p(pred_nu[:, 2, 3]),
-        })
+        # tautau_diff = vector.arr({
+        #     "px": inverse_signed_log1p(pred_nu[:, 2, 0]),
+        #     "py": inverse_signed_log1p(pred_nu[:, 2, 1]),
+        #     "pz": inverse_signed_log1p(pred_nu[:, 2, 2]),
+        #     "energy": inverse_signed_log1p(pred_nu[:, 2, 3]),
+        # })
 
         tau1_full = tau1 + nu1
         tau2_full = tau2 + nu2
         tautau_nu_pred = tau1_full + tau2_full
-        tautau_direct_pred = (tau1 + tau2).to_pxpypzenergy() + tautau_diff
+        # tautau_direct_pred = (tau1 + tau2).to_pxpypzenergy() + tautau_diff
         # tautau_truth = tau1 + truth_nu1 + tau2 + truth_nu2
         tautau_truth = truth_tautau
 
@@ -308,13 +308,13 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
                     logger=self.logger,
                 )
 
-                log_vector_distribution(
-                    tautau_direct_pred, tautau_truth,
-                    name="tautau_predict", epoch=epoch,
-                    weight=weight,
-                    raw_file=raw_file, raw_file_label_map=unique_file_map,
-                    logger=self.logger,
-                )
+                # log_vector_distribution(
+                #     tautau_direct_pred, tautau_truth,
+                #     name="tautau_predict", epoch=epoch,
+                #     weight=weight,
+                #     raw_file=raw_file, raw_file_label_map=unique_file_map,
+                #     logger=self.logger,
+                # )
 
             # Log everything to Wandb
             wandb.log(results)

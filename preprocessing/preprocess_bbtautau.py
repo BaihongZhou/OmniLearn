@@ -279,8 +279,8 @@ def process(
 
                     X.setdefault(particle, []).append(np.hstack(particle_features))
 
-            diff = build_extra_targets(data)
-            nu.setdefault('diff', []).append(diff)
+            # diff = build_extra_targets(data)
+            # nu.setdefault('diff', []).append(diff)
 
     X = np.concatenate([np.vstack(parts)[:, None, :] for parts in X.values()], axis=1)
     nu = np.concatenate([np.vstack(parts) for parts in nu.values()], axis=1)
@@ -333,7 +333,7 @@ def process(
     nu[:, 4] = signed_log1p(nu[:, 0] - nu[:, 4])  # nu2 pt
     nu[:, 5] = nu[:, 1] - nu[:, 5]  # nu2 eta
     nu[:, 6] = nu[:, 2] - nu[:, 6]  # nu2 phi
-    nu[:, 7] = signed_log1p(nu[: 3] - nu[:, 7])  # nu2 energy
+    nu[:, 7] = signed_log1p(nu[:, 3] - nu[:, 7])  # nu2 energy
     nu[:, 0] = np.log1p(nu[:, 0])  # nu1 pt
     nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
 

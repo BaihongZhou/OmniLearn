@@ -61,10 +61,10 @@ class PET_jetnet(keras.Model):
             num_adv_classes=3,
             num_steps=100,
 
-            rho=7.0,
+            rho=5.0,
             P_mean=-1.2,
             P_std=1.2,
-            sigma_data=0.5,
+            sigma_data=1.0,
             S_churn=0.0,
             S_min=0.0,
             S_noise=1.0,
@@ -82,8 +82,8 @@ class PET_jetnet(keras.Model):
         self.ema = 0.999
         self.shape = (-1, 1, 1)
 
-        self.sigma_max = 273.8 #80
-        self.sigma_min = 0.0003311325272079557 #0.002
+        self.sigma_max = 80
+        self.sigma_min = 0.002
         self.rho = rho  # better balance between low and high noise
         self.P_mean = P_mean
         self.P_std = P_std

@@ -321,14 +321,21 @@ def process(
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt
     X[:, :, 3] = np.log1p(X[:, :, 3])  # energy
+    # nu[:, 0] = np.log1p(nu[:, 0])  # nu1 pt
+    # nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
+    # nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
+    # nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
+    # nu[:, 8] = signed_log1p(nu[:, 8])  # truth_tautau - (tau1 + tau2) px
+    # nu[:, 9] = signed_log1p(nu[:, 9])  # truth_tautau - (tau1 + tau2) py
+    # nu[:, 10] = signed_log1p(nu[:, 10])  # truth_tautau - (tau1 + tau2) pz
+    # nu[:, 11] = signed_log1p(nu[:, 11])  # truth_tautau - (tau1 + tau2) energy
+
+    nu[:, 4] = signed_log1p(nu[: 0] - nu[:, 4])  # nu2 pt
+    nu[:, 5] = nu[:, 1] - nu[:, 5]  # nu2 eta
+    nu[:, 6] = nu[:, 2] - nu[:, 6]  # nu2 phi
+    nu[:, 7] = signed_log1p(nu[: 3] - nu[:, 7])  # nu2 energy
     nu[:, 0] = np.log1p(nu[:, 0])  # nu1 pt
     nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
-    nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
-    nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
-    nu[:, 8] = signed_log1p(nu[:, 8])  # truth_tautau - (tau1 + tau2) px
-    nu[:, 9] = signed_log1p(nu[:, 9])  # truth_tautau - (tau1 + tau2) py
-    nu[:, 10] = signed_log1p(nu[:, 10])  # truth_tautau - (tau1 + tau2) pz
-    nu[:, 11] = signed_log1p(nu[:, 11])  # truth_tautau - (tau1 + tau2) energy
 
     if for_training:
         # Indices to compute mean and std
@@ -339,7 +346,7 @@ def process(
             particle_mean[idx] = np.mean(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
             particle_std[idx] = np.std(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
 
-        selected_indices = [0, 3, 4, 7] + [8, 9, 10, 11]
+        selected_indices = [0, 3, 4, 7] # + [8, 9, 10, 11]
         nu_mean = np.zeros(nu.shape[1])
         nu_std = np.ones(nu.shape[1])
         for idx in selected_indices:

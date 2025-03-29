@@ -33,38 +33,39 @@ def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, log
             x = getattr(pred, name)
             y = getattr(truth, name)
 
-            try:
-                results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
-            except ValueError:
-                results[f"{prefix}/EMD_{name}"] = np.nan
-                if logger:
-                    logger.warning(f"[Eval] Invalid input for EMD in {prefix} {name}")
+            # Remove NaNs or Infs
+            mask = np.isfinite(x) & np.isfinite(y)
+            n_bad = len(x) - np.count_nonzero(mask)
 
-            # Ensure finite values only
-            if not (np.isfinite(x).all() and np.isfinite(y).all()):
-                if logger:
-                    logger.warning(f"[Eval] Non-finite values in {prefix} {name}, skipping metric.")
+            if n_bad > 0 and logger:
+                logger.warning(f"[Eval] Removed {n_bad} non-finite values in {prefix} {name}")
 
-            # Avoid zero-variance crash
-            if np.std(x) == 0 or np.std(y) == 0:
+            x = x[mask]
+            y = y[mask]
+            w = weights[mask] if weights is not None else None
+
+            # Skip Pearson if variance is zero
+            if len(x) == 0 or np.std(x) == 0 or np.std(y) == 0:
                 if logger:
-                    logger.warning(f"[Eval] Zero variance in {prefix} {name}, skipping Pearson.")
+                    logger.warning(f"[Eval] Zero std or empty input in {prefix} {name}, skipping Pearson.")
                 results[f"{prefix}/Pearson_{name}"] = np.nan
             else:
                 results[f"{prefix}/Pearson_{name}"] = pearsonr(x, y)[0]
 
-            if save_plots:
-                min_truth, max_truth = np.min(y), np.max(y)
-                truth_range = max_truth - min_truth
-                buffer = 0.25 * truth_range
-                low = min_truth - buffer
-                high = max_truth + buffer
+            try:
+                results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
+            except Exception as e:
+                if logger:
+                    logger.warning(f"[Eval] Failed EMD for {prefix} {name}: {str(e)}")
+                results[f"{prefix}/EMD_{name}"] = np.nan
 
-                n_bins = 51
-                bins = np.linspace(low, high, n_bins - 2)
-                bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])
+            if save_plots:
+                min_val, max_val = np.min(y), np.max(y)
+                span = max_val - min_val
+                low, high = min_val - 0.25 * span, max_val + 0.25 * span
+                bins = np.linspace(low, high, 51)
                 hist_pred, _ = np.histogram(x, bins=bins, density=True)
-                hist_truth, _ = np.histogram(y, bins=bins, density=True, weights=weights)
+                hist_truth, _ = np.histogram(y, bins=bins, density=True, weights=w)
                 bin_centers = 0.5 * (bins[1:] + bins[:-1])
 
                 fig, ax = plt.subplots()
@@ -74,7 +75,6 @@ def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, log
                 ax.set_title(f"{prefix} {name} dist @ epoch {epoch}")
                 ax.legend()
                 ax.grid(True)
-
                 wandb.log({f"{prefix}/dist_{name}": wandb.Image(fig)})
                 plt.close(fig)
 

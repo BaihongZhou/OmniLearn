@@ -117,9 +117,11 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                 f"extra_{i}": extra_info[:, i]
                 for i in range(extra_info.shape[1])
             })
+            # Logging the shape of the data_dict
+            for key, value in data_dict.items():
+                logger.info(f"Key: {key}, Shape: {value.shape}")
 
             np.savez(sample_name, **data_dict)
-
             logger.info(f"Saved {sample_name}")
         else:
             file_list = eval_dataloader.unique_file_map
@@ -135,6 +137,11 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                     f"extra_{i}": extra_info[mask, i]
                     for i in range(extra_info.shape[1])
                 })
+
+                # Logging the shape of the data_dict
+                for key, value in data_dict.items():
+                    logger.info(f"Key: {key}, Shape: {value.shape}")
+
                 np.savez(sample_name.with_name(file + ".npz"), **data_dict)
                 logger.info(f"Saved {sample_name.with_name(file + '.npz')}")
 

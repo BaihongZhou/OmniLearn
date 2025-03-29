@@ -132,12 +132,12 @@ def calculate_correlations(cond_vec, nu, input_names):
 
     names = input_names
 
-    print(r"### Pearson Correlation with ν1 pT:")
+    print(r"--> Pearson Correlation with v1 pT:")
     for i, name in enumerate(names):
         corr = np.corrcoef(truth_nu1_pt, cond_vec[:, i])[0, 1]
         print(f"  {name:20}: {corr:.3f}")
 
-    print(r"### Pearson Correlation with ν2 pT:")
+    print(r"--> Pearson Correlation with v2 pT:")
     for i, name in enumerate(names):
         corr = np.corrcoef(truth_nu2_pt, cond_vec[:, i])[0, 1]
         print(f"  {name:20}: {corr:.3f}")

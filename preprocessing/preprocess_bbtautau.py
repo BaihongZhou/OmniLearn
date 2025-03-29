@@ -22,7 +22,7 @@ def signed_log1p(x):
     return np.sign(x) * np.log1p(np.abs(x))
 
 
-def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, truth_nu=None, truth_mass=None):
+def build_condition_vector(jets, taus, y_met, jet_pt_threshold=10.0, truth_nu=None, truth_mass=None):
     taus = vector.arr({
         "pt": taus[..., 0],
         "eta": taus[..., 1],
@@ -76,7 +76,6 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, tr
     effective_cond = len(all_inputs)
 
     if truth_nu is not None:
-
         truth_nu1 = vector.arr({
             "pt": truth_nu[:, 0],
             "eta": truth_nu[:, 1],
@@ -173,7 +172,6 @@ def process(
         if train_file.exists() and not overwrite:
             print(f"Skipping processing data: {train_file} already exists")
             return
-
 
     X = {}
     nu = {}
@@ -283,7 +281,8 @@ def process(
         # Assuming first 2 particles = tau_vis → jets start from index 2
         jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
         tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
-        y, input_names, eff_cond = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu, truth_mass=mass_qt)
+        y, input_names, eff_cond = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu,
+                                                          truth_mass=mass_qt)
         calculate_correlations(y, nu, input_names)
     else:
         X = X[:, :len(features['tau_vis']['particles'])]

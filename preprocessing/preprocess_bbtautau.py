@@ -78,12 +78,14 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, tr
             "pt": truth_nu[:, 0],
             "eta": truth_nu[:, 1],
             "phi": truth_nu[:, 2],
+            "mass": np.zeros_like(truth_nu[:, 0]),
         })
 
         truth_nu2 = vector.arr({
             "pt": truth_nu[:, 3],
             "eta": truth_nu[:, 4],
             "phi": truth_nu[:, 5],
+            "mass": np.zeros_like(truth_nu[:, 3]),
         })
 
         all_inputs.update({

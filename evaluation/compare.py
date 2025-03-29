@@ -7,11 +7,13 @@ from tqdm import tqdm
 import vector
 from functools import partial
 
-from evaluation.stack import plot_hist, plot_reco_truth_histogram
+from evaluation.stack import plot_hist, plot_reco_truth_histogram, plot_array_hist_ratio
 from evaluation.correlation import plot_linearity
+
 
 def inverse_signed_log1p(y):
     return np.sign(y) * (np.expm1(np.abs(y)))
+
 
 def get_neutrino_candidates(reco_nu, method='random'):
     if method == 'random':
@@ -103,8 +105,9 @@ def read_data(raw_files: list[Path], ml_files: list[Path]):
                 data[key] = []
             data[key].append(raw_data[key])
 
-        data['reco_nu1'] = ml_data['nu1'][final_indices]
-        data['reco_nu2'] = ml_data['nu2'][final_indices]
+        data['reco_nu1'] = ml_data['recon_nu1'][final_indices]
+        data['reco_nu2'] = ml_data['recon_nu2'][final_indices]
+        data['M_tautau'] = ml_data['M_tautau'][final_indices]
         # data['diff'] = ml_data['diff'][final_indices]
 
     for key in data:
@@ -125,7 +128,7 @@ def process_data(
         if key_columns is not None and key in key_columns:
 
             array_data = data[key]
-            if 'reco_nu1' in key:
+            if 'reco_nu' in key:
                 # IMPORTANT
                 # pt and E is np.log1p(pt), need to revert
                 array_data = get_neutrino(data[key])
@@ -133,25 +136,17 @@ def process_data(
                     'pt': np.expm1(array_data[:, 0]),
                     'eta': array_data[:, 1],
                     'phi': array_data[:, 2],
-                    # 'mass': np.zeros(array_data.shape[0]),
-                    'energy': np.expm1(array_data[:, 3]),
+                    'mass': np.zeros(array_data.shape[0]),
+                    # 'energy': np.expm1(array_data[:, 3]),
                 }).to_pxpypzenergy()
-            if 'reco_nu2'  in key:
-                array_data = get_neutrino(data[key])
-                data[key] = vector.arr({
-                    "pt": data['reco_nu1'].pt - inverse_signed_log1p(array_data[:, 0]),
-                    "eta": data['reco_nu1'].eta - array_data[:, 1],
-                    "phi": data['reco_nu1'].phi - array_data[:, 2],
-                    "energy": data['reco_nu1'].energy - inverse_signed_log1p(array_data[:, 3]),
-                })
             elif 'diff' in key:
                 array_data = get_neutrino(data[key])
                 data[key] = vector.array({
                     'px': inverse_signed_log1p(array_data[:, 0]),
-                    'py':inverse_signed_log1p(array_data[:, 1]),
+                    'py': inverse_signed_log1p(array_data[:, 1]),
                     'pz': inverse_signed_log1p(array_data[:, 2]),
                     # 'mass': np.zeros(array_data.shape[0]),
-                    'energy': inverse_signed_log1p(array_data[:, 3]),
+                    # 'energy': inverse_signed_log1p(array_data[:, 3]),
                 }).to_pxpypzenergy()
             else:
                 data[key] = vector.array({
@@ -160,7 +155,6 @@ def process_data(
                     'phi': array_data[:, 2],
                     'mass': array_data[:, 3],
                 }).to_pxpypzenergy()
-
 
     data['reco_Tau1'] = data['Tau1'] + data['reco_nu1']
     data['reco_Tau2'] = data['Tau2'] + data['reco_nu2']
@@ -202,7 +196,7 @@ def read_variable(files: dict, var: str, weight: str = 'weight'):
 if __name__ == '__main__':
 
     # tag = 'Output.Ztt_only'
-    tag = 'Output.delta'
+    tag = 'Output.mass'
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
@@ -278,6 +272,31 @@ if __name__ == '__main__':
             get_neutrino=get_neutrino,
             key_columns=key_columns,
             delta_columns=delta_columns,
+        )
+
+    # Plot Truth TauTau Mass and predicted TauTau Mass
+    for samples in files.keys():
+        if files[samples]['signal']:
+            label = f"{samples} (Signal)"
+        else:
+            label = f"{samples} (Background)"
+
+        plot_array_hist_ratio(
+            x_truth=files[samples]['data']['truth_TauTau'].mass,
+            x_list={
+                "ML": files[samples]['data']['M_tautau'],
+                'MMC': files[samples]['data']['mmc'].mass,
+            },
+            label_map={
+                "ML": f"{label} ML",
+                'MMC': "MMC",
+            },
+            weight=files[samples]['data']['weight_mc'],
+            x_title=r'$M_{\tau\tau}$',
+            save_path=out_dir / f"reco_truth_{samples}_mass.png",
+            fig_size=(10, 8),
+            bins=100,
+            range=(60, 260),
         )
 
     for var, var_title in tqdm(zip(delta_columns, delta_columns_title), desc='Variables'):

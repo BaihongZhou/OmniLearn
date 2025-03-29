@@ -16,10 +16,21 @@ from configs.global_config import load_config, save_config
 import configs.global_config as config
 
 from sklearn.preprocessing import QuantileTransformer
+from scipy.stats import norm
 
 
 def signed_log1p(x):
     return np.sign(x) * np.log1p(np.abs(x))
+
+
+def convert_phi_to_normal(phi):
+    # Step 1: Normalize φ to [0, 1]
+    phi_uniform = (phi + np.pi) / (2 * np.pi)
+    # avoid exact 0 or 1
+    phi_uniform = np.clip(phi_uniform, 1e-6, 1 - 1e-6)
+    # Step 2: Map to normal using inverse CDF
+    phi_normal = norm.ppf(phi_uniform)
+    return phi_normal
 
 
 def build_condition_vector(jets, taus, y_met, jet_pt_threshold=10.0, truth_nu=None, truth_mass=None):
@@ -47,10 +58,10 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold=10.0, truth_nu=No
     all_inputs = {
         "met_pt": np.log1p(met.pt),
         "met_phi": met.phi,
-        "HT_Tau": np.log1p(HT_Tau),
-        "MET_sig_tau": np.log1p(MET_sig_tau),
-        "deltaR_tau": deltaR_tau,
-        "met_balance": np.log1p(met_balance),
+        # "HT_Tau": np.log1p(HT_Tau),
+        # "MET_sig_tau": np.log1p(MET_sig_tau),
+        # "deltaR_tau": deltaR_tau,
+        # "met_balance": np.log1p(met_balance),
     }
 
     if jets is not None:
@@ -281,8 +292,10 @@ def process(
         # Assuming first 2 particles = tau_vis → jets start from index 2
         jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
         tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
-        y, input_names, eff_cond = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu,
-                                                          truth_mass=mass_qt)
+        y, input_names, eff_cond = build_condition_vector(
+            jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu,
+            truth_mass=mass_qt
+        )
         calculate_correlations(y, nu, input_names)
     else:
         X = X[:, :len(features['tau_vis']['particles'])]
@@ -298,6 +311,9 @@ def process(
     X[:, :, 3] = np.log1p(X[:, :, 3])  # energy
     nu[:, 1] = np.log1p(nu[:, 1])  # nu1 pt, y will also change
     nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt, y will also change
+
+    nu[:, 3] = convert_phi_to_normal(nu[:, 3])  # nu1 phi
+    nu[:, 6] = convert_phi_to_normal(nu[:, 6])  # nu2 phi
 
     if for_training:
         # Indices to compute mean and std

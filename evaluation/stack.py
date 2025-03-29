@@ -201,7 +201,6 @@ def plot_reco_truth_histogram(
         if sample in ['hhttbbSM', 'Ztt', 'VBFhhttbbSM'] and column == "mass":
             density = False
 
-
         fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=fig_size, sharex=True, height_ratios=[3, 1])
 
         # Extract values
@@ -313,3 +312,84 @@ def plot_reco_truth_histogram(
         if save_path is not None:
             fig.savefig(save_path / f"{sample}_hist_ratio.png", dpi=300, bbox_inches="tight")
         plt.close(fig)
+
+
+def plot_array_hist_ratio(
+        x_truth: np.ndarray,
+        x_list: dict[str, np.ndarray],
+        label_map: dict[str, str] | None = None,
+        weight: np.ndarray | None = None,
+        x_title: str = "Variable",
+        save_path: Path | None = None,
+        fig_size=(8, 8),
+        bins=100,
+        quantiles=(0.01, 0.99),
+        range: tuple[float, float] | None = None,
+):
+    assert isinstance(x_list, dict), "x_list must be a dictionary"
+
+    # Quantile cut range
+    if range is None:
+        x_min, x_max = np.percentile(x_truth, [q * 100 for q in quantiles])
+    # x_truth = x_truth[(x_truth >= x_min) & (x_truth <= x_max)]
+    else:
+        x_min, x_max = range
+
+    # Histogram truth
+    hist_args = dict(bins=bins, range=(x_min, x_max), density=False)
+    truth_hist, bin_edges = np.histogram(x_truth, weights=weight, **hist_args)
+    truth_err2, _ = np.histogram(x_truth, weights=(weight ** 2) if weight is not None else None,
+                                 **hist_args)
+    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+    bin_width = bin_edges[1] - bin_edges[0]
+    total_truth = np.sum(truth_hist) * bin_width
+    truth_density = truth_hist / total_truth
+    truth_err = np.sqrt(truth_err2) / total_truth
+
+    # Plot
+    fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=fig_size, sharex=True, height_ratios=[3, 1])
+
+    ax_top.plot(bin_centers, truth_density, color="black", label="Truth", linewidth=2)
+
+    for name, x_vals in x_list.items():
+        label = label_map[name] if label_map else name
+        mask = (x_vals >= x_min) & (x_vals <= x_max)
+        x_vals = x_vals[mask]
+        w = weight[mask] if weight is not None else None
+
+        # Hist and error
+        h, _ = np.histogram(x_vals, weights=w, **hist_args)
+        h2, _ = np.histogram(x_vals, weights=w ** 2 if w is not None else None, **hist_args)
+        total = np.sum(h) * bin_width
+        h_density = h / total
+        h_err = np.sqrt(h2) / total
+
+        ax_top.plot(bin_centers, h_density, label=label, linewidth=2, linestyle="--")
+
+        # Ratio
+        ratio = np.divide(h_density, truth_density, out=np.ones_like(h_density), where=truth_density > 0)
+        err = np.ones_like(ratio)
+        mask_valid = (truth_density > 0) & (h_density > 0)
+        err[mask_valid] = ratio[mask_valid] * np.sqrt(
+            (h_err[mask_valid] / h_density[mask_valid]) ** 2 +
+            (truth_err[mask_valid] / truth_density[mask_valid]) ** 2
+        )
+
+        ax_bot.plot(bin_centers, ratio, label=label)
+        ax_bot.fill_between(bin_centers, ratio - err, ratio + err, alpha=0.3)
+
+    ax_top.set_ylabel("Density")
+    ax_top.set_title(f"{x_title}")
+    ax_top.legend()
+    ax_top.grid(True)
+
+    ax_bot.axhline(1.0, color="black", linestyle="--")
+    ax_bot.set_ylim(0.5, 1.5)
+    ax_bot.set_xlabel(x_title)
+    ax_bot.set_ylabel("Ratio")
+    ax_bot.grid(True)
+    ax_bot.legend()
+
+    if save_path:
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)

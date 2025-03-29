@@ -3,7 +3,7 @@ import numpy as np
 import logging
 import vector
 import matplotlib.pyplot as plt
-from scipy.stats import wasserstein_distance, pearsonr
+from scipy.stats import wasserstein_distance, pearsonr, norm
 from scipy.spatial.distance import cdist
 
 from matplotlib.colors import LinearSegmentedColormap
@@ -28,6 +28,12 @@ except ImportError or ModuleNotFoundError:
 
 def inverse_signed_log1p(y):
     return np.sign(y) * (np.expm1(np.abs(y)))
+
+
+def inverse_gauss_to_phi(phi_gauss):
+    phi_uniform_back = norm.cdf(phi_gauss)
+    phi_recovered = phi_uniform_back * 2 * np.pi - np.pi
+    return phi_recovered
 
 
 def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, logger=None, weights=None):
@@ -80,9 +86,9 @@ def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, log
                 if name == "mass":
                     low, high = 40, 250
                 if name == "pt":
-                    low, high = 0, 250
+                    low, high = 0, 100
                 if name == "energy":
-                    low, high = 0, 750
+                    low, high = 0, 300
 
                 bins = np.linspace(low, high, 51)
                 hist_pred, _ = np.histogram(x, bins=bins, density=True)
@@ -144,9 +150,9 @@ def log_vector_distribution(
             if k == "mass":
                 low, high = 40, 250
             if k == "pt":
-                low, high = 0, 100
+                low, high = 0, 250
             if k == "energy":
-                low, high = 0, 300
+                low, high = 0, 700
 
             bins = np.linspace(low, high, 101)
             hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)
@@ -340,26 +346,26 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         truth_nu1 = vector.arr({
             "pt": np.expm1(truth_nu[:, nu1_start]),
             "eta": truth_nu[:, nu1_start + 1],
-            "phi": truth_nu[:, nu1_start + 2],
+            "phi": inverse_gauss_to_phi(truth_nu[:, nu1_start + 2]),
             "mass": np.zeros_like(truth_nu[:, nu1_start]),
         })
         truth_nu2 = vector.arr({
             "pt": np.expm1(truth_nu[:, nu2_start]),
             "eta": truth_nu[:, nu2_start + 1],
-            "phi": truth_nu[:, nu2_start + 2],
+            "phi": inverse_gauss_to_phi(truth_nu[:, nu2_start + 2]),
             "mass": np.zeros_like(truth_nu[:, 2]),
         })
 
         nu1 = vector.arr({
             "pt": np.expm1(pred_nu[:, nu1_start]),
             "eta": pred_nu[:, nu1_start + 1],
-            "phi": pred_nu[:, nu1_start + 2],
+            "phi": inverse_gauss_to_phi(pred_nu[:, nu1_start + 2]),
             "mass": np.zeros_like(pred_nu[:, 2]),
         })
         nu2 = vector.arr({
             "pt": np.expm1(pred_nu[:, nu2_start]),
             "eta": pred_nu[:, nu2_start + 1],
-            "phi": pred_nu[:, nu2_start + 2],
+            "phi": inverse_gauss_to_phi(pred_nu[:, nu2_start + 2]),
             "mass": np.zeros_like(pred_nu[:, 2]),
         })
 

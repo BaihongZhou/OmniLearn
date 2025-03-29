@@ -61,15 +61,15 @@ class PET_jetnet(keras.Model):
             num_adv_classes=3,
             num_steps=100,
 
-            rho=5.0,
+            rho=7.0,
             P_mean=-1.2,
-            P_std=1.2,
-            sigma_data=1.0,
+            P_std=1.3,
+            sigma_data=0.5,
             S_churn=0.0,
             S_min=0.0,
             S_noise=1.0,
 
-            eff_cond=6,
+            eff_cond=2,
     ):
         super(PET_jetnet, self).__init__()
 
@@ -155,6 +155,9 @@ class PET_jetnet(keras.Model):
 
         # self.ema_part = keras.models.clone_model(self.model_part)
         self.loss_tracker = keras.metrics.Mean(name="loss")
+        self.loss_1_tracker = keras.metrics.Mean(name="loss_z")
+        self.loss_2_tracker = keras.metrics.Mean(name="loss_v1")
+        self.loss_3_tracker = keras.metrics.Mean(name="loss_v2")
 
         # Add this to __init__:
         self.sigma_tracker = tf.keras.metrics.Mean(name="sigma_mean")
@@ -170,7 +173,10 @@ class PET_jetnet(keras.Model):
         at the start of each epoch and at the start of an `evaluate()` call.
         """
         # return [self.loss_tracker, self.adv_loss_tracker]
-        return [self.loss_tracker, self.sigma_tracker]
+        return [
+            self.loss_tracker, self.sigma_tracker,
+            self.loss_1_tracker, self.loss_2_tracker, self.loss_3_tracker
+        ]
 
     def compile(self, body_optimizer, head_optimizer):
         super(PET_jetnet, self).compile(experimental_run_tf_function=False,
@@ -248,6 +254,7 @@ class PET_jetnet(keras.Model):
             mask,
             model_input, model_time, cond
         ])
+
         return c_skip * x_noisy + c_out * v_pred
 
     def train_step(self, inputs):
@@ -256,13 +263,17 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         # 🔹 Sample stage for each event
-        stages = tf.random.uniform((batch_size,), minval=0, maxval=3, dtype=tf.int32)
+        probs = tf.constant([0.4, 0.3, 0.3])  # Z:40%, v1:30%, v2:30%
+        stages = tf.random.categorical(tf.math.log([probs]), batch_size)[0]
 
-        # 🔹 Count stages
-        z_count = tf.reduce_sum(tf.cast(tf.equal(stages, 0), tf.int32))
-        v1_count = tf.reduce_sum(tf.cast(tf.equal(stages, 1), tf.int32))
-        v2_count = tf.reduce_sum(tf.cast(tf.equal(stages, 2), tf.int32))
-        # tf.print("Stage counts: Z =", z_count, "v1 =", v1_count, "v2 =", v2_count)
+        # 🔹 Mask for each stage
+        stage_z_mask = tf.equal(stages, 0)  # Z stage
+        stage_v1_mask = tf.equal(stages, 1)  # v1 stage
+        stage_v2_mask = tf.equal(stages, 2)  # v2 stage
+        # 🔹 Expand to match shape for masking
+        z_mask = tf.cast(tf.expand_dims(stage_z_mask, -1), tf.float32)
+        v1_mask = tf.cast(tf.expand_dims(stage_v1_mask, -1), tf.float32)
+        v2_mask = tf.cast(tf.expand_dims(stage_v2_mask, -1), tf.float32)
 
         # 🔹 Generate masks
         cond_mask, target_mask = self.make_condition_and_target_masks(stages, batch_size, eff_cond=self.eff_cond)
@@ -273,16 +284,24 @@ class PET_jetnet(keras.Model):
 
         cond_mask = tf.cast(cond_mask, dtype=y.dtype)
         y = y * cond_mask
-        x_clean = x['input_jet'] * target_mask
+        x_clean = x['input_jet']
 
-        P_mean = self.P_mean
-        P_std = self.P_std
+        # 🔹 Stage-dependent noise config
+        stage_sigma_config = {
+            0: (-1.8, 0.6),  # Z stage
+            1: (-1.2, 1.0),  # v1 stage
+            2: (-0.8, 1.3),  # v2 stage
+        }
+
+        stage_p_mean = tf.gather([v[0] for v in stage_sigma_config.values()], stages)
+        stage_p_std = tf.gather([v[1] for v in stage_sigma_config.values()], stages)
+
         sigma_data = self.sigma_data
 
         with tf.GradientTape(persistent=True) as tape:
-            rnd_normal = tf.random.normal((batch_size, 1), dtype=tf.float32)
-            sigma = tf.exp(rnd_normal * P_std + P_mean)
-            sigma = tf.cast(sigma, tf.float32)
+            rnd_normal = tf.random.normal((batch_size,), dtype=tf.float32)
+            sigma = tf.exp(rnd_normal * stage_p_std + stage_p_mean)
+            sigma = tf.cast(tf.reshape(sigma, (-1, 1)), tf.float32)
             loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
 
             eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
@@ -301,14 +320,10 @@ class PET_jetnet(keras.Model):
             target = x_clean
             per_event_loss = loss_weight * tf.square(pred - target) * target_mask
 
-            # 🔹 Debug value stats (only supervised dims)
-            # pred_supervised = tf.boolean_mask(pred, target_mask > 0)
-            # target_supervised = tf.boolean_mask(target, target_mask > 0)
-            # tf.print("Pred mean/std:", tf.reduce_mean(pred_supervised), tf.math.reduce_std(pred_supervised))
-            # tf.print("Target mean/std:", tf.reduce_mean(target_supervised), tf.math.reduce_std(target_supervised))
-
-            # loss_debug = tf.boolean_mask(per_event_loss, target_mask > 0)
-            # tf.print("Loss mean/std:", tf.reduce_mean(loss_debug), tf.math.reduce_std(loss_debug))
+            # 🔹 Get per-stage masked losses
+            loss_z = tf.reduce_mean(per_event_loss * z_mask)
+            loss_v1 = tf.reduce_mean(per_event_loss * v1_mask)
+            loss_v2 = tf.reduce_mean(per_event_loss * v2_mask)
 
             if weight is not None:
                 weight = tf.expand_dims(weight, axis=-1)
@@ -333,6 +348,10 @@ class PET_jetnet(keras.Model):
         self.loss_tracker.update_state(loss)
         self.sigma_tracker.update_state(sigma)
 
+        self.loss_1_tracker.update_state(loss_z)
+        self.loss_2_tracker.update_state(loss_v1)
+        self.loss_3_tracker.update_state(loss_v2)
+
         return {m.name: m.result() for m in self.metrics}
 
     def test_step(self, inputs):
@@ -341,31 +360,41 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         # 🔹 Sample stage for each event
-        stages = tf.random.uniform((batch_size,), minval=0, maxval=3, dtype=tf.int32)
+        probs = tf.constant([0.4, 0.3, 0.3])  # Z:40%, v1:30%, v2:30%
+        stages = tf.random.categorical(tf.math.log([probs]), batch_size)[0]
 
-        # 🔹 Count stages
-        z_count = tf.reduce_sum(tf.cast(tf.equal(stages, 0), tf.int32))
-        v1_count = tf.reduce_sum(tf.cast(tf.equal(stages, 1), tf.int32))
-        v2_count = tf.reduce_sum(tf.cast(tf.equal(stages, 2), tf.int32))
-        # tf.print("[Test] Stage counts: Z =", z_count, "v1 =", v1_count, "v2 =", v2_count)
+        # 🔹 Mask for each stage
+        stage_z_mask = tf.equal(stages, 0)  # Z stage
+        stage_v1_mask = tf.equal(stages, 1)  # v1 stage
+        stage_v2_mask = tf.equal(stages, 2)  # v2 stage
+        # 🔹 Expand to match shape for masking
+        z_mask = tf.cast(tf.expand_dims(stage_z_mask, -1), tf.float32)
+        v1_mask = tf.cast(tf.expand_dims(stage_v1_mask, -1), tf.float32)
+        v2_mask = tf.cast(tf.expand_dims(stage_v2_mask, -1), tf.float32)
 
         # 🔹 Generate masks
-        cond_mask, target_mask = self.make_condition_and_target_masks(stages, batch_size, eff_cond=6)
-        # tf.print("[Test] cond_mask[0]:", cond_mask[0])
+        cond_mask, target_mask = self.make_condition_and_target_masks(stages, batch_size, eff_cond=self.eff_cond)
+        # tf.print("[Targetest] cond_mask[0]:", cond_mask[0])
         # tf.print("[Test] target_mask[0]:", target_mask[0])
 
         cond_mask = tf.cast(cond_mask, dtype=y.dtype)
         y = y * cond_mask
-        x_clean = x['input_jet'] * target_mask
-        x['input_jet'] = x_clean
+        x_clean = x['input_jet']
 
-        P_mean = self.P_mean
-        P_std = self.P_std
+        # 🔹 Stage-dependent noise config
+        stage_sigma_config = {
+            0: (-1.8, 0.6),  # Z stage
+            1: (-1.2, 1.0),  # v1 stage
+            2: (-0.8, 1.3),  # v2 stage
+        }
+
+        stage_p_mean = tf.gather([v[0] for v in stage_sigma_config.values()], stages)
+        stage_p_std = tf.gather([v[1] for v in stage_sigma_config.values()], stages)
         sigma_data = self.sigma_data
 
-        rnd_normal = tf.random.normal((batch_size, 1), dtype=tf.float32)
-        sigma = tf.exp(rnd_normal * P_std + P_mean)
-        sigma = tf.cast(sigma, tf.float32)
+        rnd_normal = tf.random.normal((batch_size,), dtype=tf.float32)
+        sigma = tf.exp(rnd_normal * stage_p_std + stage_p_mean)
+        sigma = tf.cast(tf.reshape(sigma, (-1, 1)), tf.float32)
         loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
 
         eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
@@ -381,17 +410,12 @@ class PET_jetnet(keras.Model):
             y
         )
         target = x_clean
-
         per_event_loss = loss_weight * tf.square(pred - target) * target_mask
 
-        # 🔹 Debug value stats (only supervised dims)
-        pred_supervised = tf.boolean_mask(pred, target_mask > 0)
-        target_supervised = tf.boolean_mask(target, target_mask > 0)
-        # tf.print("[Test] Pred mean/std:", tf.reduce_mean(pred_supervised), tf.math.reduce_std(pred_supervised))
-        # tf.print("[Test] Target mean/std:", tf.reduce_mean(target_supervised), tf.math.reduce_std(target_supervised))
-
-        loss_debug = tf.boolean_mask(per_event_loss, target_mask > 0)
-        # tf.print("[Test] Loss mean/std:", tf.reduce_mean(loss_debug), tf.math.reduce_std(loss_debug))
+        # 🔹 Get per-stage masked losses
+        loss_z = tf.reduce_mean(per_event_loss * z_mask)
+        loss_v1 = tf.reduce_mean(per_event_loss * v1_mask)
+        loss_v2 = tf.reduce_mean(per_event_loss * v2_mask)
 
         if weight is not None:
             weight = tf.expand_dims(weight, axis=-1)
@@ -401,6 +425,11 @@ class PET_jetnet(keras.Model):
 
         self.loss_tracker.update_state(loss)
         self.sigma_tracker.update_state(sigma)
+
+        self.loss_1_tracker.update_state(loss_z)
+        self.loss_2_tracker.update_state(loss_v1)
+        self.loss_3_tracker.update_state(loss_v2)
+
         return {m.name: m.result() for m in self.metrics}
 
     def call(self, x):
@@ -449,7 +478,8 @@ class PET_jetnet(keras.Model):
                 ) if use_tqdm_inside else enumerate([(0, 1), (1, 4), (4, 7)])
 
                 for stage, (start, end) in stage_bar:
-                    num_steps_stage = self.num_steps * (stage + 1)
+                    # num_steps_stage = self.num_steps * (stage + 1)
+                    num_steps_stage = self.num_steps
 
                     jet = self.edm_sampler(
                         part=part,

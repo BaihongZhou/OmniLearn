@@ -111,7 +111,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
             data_dict = {
                 'M_tautau': eval_dataloader.mass_transform.inverse_transform(final_neutrinos[:, :, 0]),
                 'recon_nu1': final_neutrinos[:, :, nu_start_idx:nu_start_idx + nu_size],
-                'recon_nu2': final_neutrinos[:, :, nu_start_idx + nu_size + 1:nu_start_idx + 2 * nu_size + 1],
+                'recon_nu2': final_neutrinos[:, :, nu_start_idx + nu_size:nu_start_idx + 2 * nu_size],
             }
             data_dict.update({
                 f"extra_{i}": extra_info[:, i]
@@ -128,7 +128,7 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
                 data_dict = {
                     'M_tautau': eval_dataloader.mass_transform.inverse_transform(final_neutrinos[mask][:, :, 0]),
                     'recon_nu1': final_neutrinos[mask][:, :, nu_start_idx:nu_start_idx + nu_size],
-                    'recon_nu2': final_neutrinos[mask][:, :, nu_start_idx + nu_size + 1:nu_start_idx + 2 * nu_size + 1],
+                    'recon_nu2': final_neutrinos[mask][:, :, nu_start_idx + nu_size:nu_start_idx + 2 * nu_size],
                     # 'diff': final_neutrinos[mask][:, :, 8:],
                 }
                 data_dict.update({

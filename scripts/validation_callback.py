@@ -144,9 +144,9 @@ def log_vector_distribution(
             if k == "mass":
                 low, high = 40, 250
             if k == "pt":
-                low, high = 0, 250
+                low, high = 0, 100
             if k == "energy":
-                low, high = 0, 1000
+                low, high = 0, 300
 
             bins = np.linspace(low, high, 101)
             hist_pred, _ = np.histogram(x_pred, bins=bins, density=True)

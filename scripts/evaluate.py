@@ -1,4 +1,5 @@
 import os
+import pickle
 import sys
 from pathlib import Path
 
@@ -38,6 +39,9 @@ def load_data_and_model(eval_config, sample_config, model_config):
     if not Path(eval_config['model_path']).exists():
         raise ValueError(f"Model path {eval_config['model_path']} does not exist.")
 
+    with open(Path(eval_config['processed_folder']) / "mass_transform.pkl", "rb") as f:
+        mass_transform = pickle.load(f)
+
     eval_loader = utils.TauReconDataLoader(
         path=Path(eval_config['processed_folder']) / f"{sample_config['tag']}_evaluation.hdf5",
         sample_norm=sample_config['normalization'],
@@ -45,6 +49,7 @@ def load_data_and_model(eval_config, sample_config, model_config):
         rank=hvd.rank(),
         size=hvd.size(),
         nevts=sample_config['n_events'] if sample_config['n_events'] > 0 else None,
+        mass_transform=mass_transform,
     )
 
     model_config = config.cfg['model']
@@ -71,18 +76,20 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
     raw_file = eval_dataloader.raw_file
 
     nsplit = 50
-    raw_nu_candidates = model.generate(
+    final_neutrinos = model.generate(
         nsplit,
         met, part, point, mask,
         use_tqdm=hvd.rank() == 0,
         candidate=1,
+        data_loader_target_mean=eval_dataloader.mean_jet,
+        data_loader_target_std=eval_dataloader.std_jet,
     )
 
-    final_neutrinos = [
-        eval_dataloader.revert_preprocess_neutrino(raw_nu_candidates[:, i]).reshape(-1, 1, 8)
-        for i in range(raw_nu_candidates.shape[1])
-    ]
-    final_neutrinos = np.concatenate(final_neutrinos, axis=1)
+    # final_neutrinos = [
+    #     eval_dataloader.revert_preprocess_neutrino(raw_nu_candidates[:, i]).reshape(-1, 1, 8)
+    #     for i in range(raw_nu_candidates.shape[1])
+    # ]
+    # final_neutrinos = np.concatenate(final_neutrinos, axis=1)
 
     try:
         logger.info(f"[Rank {hvd.rank()}] Starting allgather with shape {final_neutrinos.shape}")
@@ -98,11 +105,13 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
         logger.info(f"extra info shape: {extra_info.shape}")
         logger.info(f"raw file shape: {raw_file.shape}")
 
+        nu_start_idx = 1
+        nu_size = 3
         if not split:
             data_dict = {
-                'recon_nu1': final_neutrinos[:, :, :4],
-                'recon_nu2': final_neutrinos[:, :, 4:8],
-                # 'diff': final_neutrinos[:, :, 8:],
+                'M_tautau': eval_dataloader.mass_transform.inverse_transform(final_neutrinos[:, :, 0]),
+                'recon_nu1': final_neutrinos[:, :, nu_start_idx:nu_start_idx + nu_size],
+                'recon_nu2': final_neutrinos[:, :, nu_start_idx + nu_size + 1:nu_start_idx + 2 * nu_size + 1],
             }
             data_dict.update({
                 f"extra_{i}": extra_info[:, i]
@@ -117,8 +126,9 @@ def sample_data(eval_dataloader, model, sample_name, raw_particle_list, split: b
             for file in file_list:
                 mask = raw_file == file_list[file]
                 data_dict = {
-                    'nu1': final_neutrinos[mask][:, :, :4],
-                    'nu2': final_neutrinos[mask][:, :, 4:8],
+                    'M_tautau': eval_dataloader.mass_transform.inverse_transform(final_neutrinos[mask][:, :, 0]),
+                    'recon_nu1': final_neutrinos[mask][:, :, nu_start_idx:nu_start_idx + nu_size],
+                    'recon_nu2': final_neutrinos[mask][:, :, nu_start_idx + nu_size + 1:nu_start_idx + 2 * nu_size + 1],
                     # 'diff': final_neutrinos[mask][:, :, 8:],
                 }
                 data_dict.update({

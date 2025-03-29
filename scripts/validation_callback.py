@@ -33,8 +33,26 @@ def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, log
             x = getattr(pred, name)
             y = getattr(truth, name)
 
-            results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
-            results[f"{prefix}/Pearson_{name}"] = pearsonr(x, y)[0]
+            try:
+                results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
+            except ValueError:
+                results[f"{prefix}/EMD_{name}"] = np.nan
+                if logger:
+                    logger.warning(f"[Eval] Invalid input for EMD in {prefix} {name}")
+                    
+            # Ensure finite values only
+            if not (np.isfinite(x).all() and np.isfinite(y).all()):
+                if logger:
+                    logger.warning(f"[Eval] Non-finite values in {prefix} {name}, skipping metric.")
+                continue
+
+            # Avoid zero-variance crash
+            if np.std(x) == 0 or np.std(y) == 0:
+                if logger:
+                    logger.warning(f"[Eval] Zero variance in {prefix} {name}, skipping Pearson.")
+                results[f"{prefix}/Pearson_{name}"] = np.nan
+            else:
+                results[f"{prefix}/Pearson_{name}"] = pearsonr(x, y)[0]
 
             if save_plots:
                 min_truth, max_truth = np.min(y), np.max(y)

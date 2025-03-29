@@ -68,6 +68,8 @@ class PET_jetnet(keras.Model):
             S_churn=0.0,
             S_min=0.0,
             S_noise=1.0,
+
+            eff_cond=6,
     ):
         super(PET_jetnet, self).__init__()
 
@@ -92,6 +94,8 @@ class PET_jetnet(keras.Model):
         self.S_min = S_min
         self.S_max = float('inf')
         self.S_noise = S_noise
+
+        self.eff_cond = eff_cond
 
         self.model_part = PET(
             num_feat=num_feat,
@@ -185,6 +189,49 @@ class PET_jetnet(keras.Model):
         self.sigma_min = min(self.sigma_min, sigma_min_val)
         self.sigma_max = max(self.sigma_max, sigma_max_val)
 
+    def make_condition_and_target_masks(self, stages, batch_size, eff_cond):
+        # Create dynamic mask for [z1, z2, v11, v12, v13]
+        dyn_mask = tf.zeros((batch_size, 5), dtype=tf.float32)
+        target_mask = tf.zeros((batch_size, 8), dtype=tf.float32)
+
+        # Stage Z
+        target_mask += tf.where(
+            tf.equal(stages[:, None], 0),
+            tf.concat([tf.ones((batch_size, 2)), tf.zeros((batch_size, 6))], axis=1),
+            tf.zeros_like(target_mask)
+        )
+
+        # Stage v1
+        dyn_mask += tf.where(
+            tf.equal(stages[:, None], 1),
+            tf.concat([tf.ones((batch_size, 2)), tf.zeros((batch_size, 3))], axis=1),
+            tf.zeros_like(dyn_mask)
+        )
+        target_mask += tf.where(
+            tf.equal(stages[:, None], 1),
+            tf.concat([tf.zeros((batch_size, 2)), tf.ones((batch_size, 3)), tf.zeros((batch_size, 3))], axis=1),
+            tf.zeros_like(target_mask)
+        )
+
+        # Stage v2
+        dyn_mask += tf.where(
+            tf.equal(stages[:, None], 2),
+            tf.ones((batch_size, 5)), tf.zeros_like(dyn_mask)
+        )
+        target_mask += tf.where(
+            tf.equal(stages[:, None], 2),
+            tf.concat([tf.zeros((batch_size, 5)), tf.ones((batch_size, 3))], axis=1),
+            tf.zeros_like(target_mask)
+        )
+
+        # Merge back full condition mask
+        cond_mask = tf.concat([
+            tf.ones((batch_size, eff_cond), dtype=tf.float32),  # static part
+            dyn_mask  # dynamic [z1, z2, v1]
+        ], axis=1)
+
+        return cond_mask, target_mask
+
     def edm_preconditioned_network(self, model_part, x_noisy, sigma, features, points, mask, cond):
 
         c_skip = self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2)
@@ -208,6 +255,26 @@ class PET_jetnet(keras.Model):
         batch_size = tf.shape(x['input_jet'])[0]
         weight = x['input_weight']
 
+        # 🔹 Sample stage for each event
+        stages = tf.random.uniform((batch_size,), minval=0, maxval=3, dtype=tf.int32)
+
+        # 🔹 Count stages
+        z_count = tf.reduce_sum(tf.cast(tf.equal(stages, 0), tf.int32))
+        v1_count = tf.reduce_sum(tf.cast(tf.equal(stages, 1), tf.int32))
+        v2_count = tf.reduce_sum(tf.cast(tf.equal(stages, 2), tf.int32))
+        # tf.print("Stage counts: Z =", z_count, "v1 =", v1_count, "v2 =", v2_count)
+
+        # 🔹 Generate masks
+        cond_mask, target_mask = self.make_condition_and_target_masks(stages, batch_size, eff_cond=self.eff_cond)
+
+        # 🔹 Debug mask shape/values (only first 2 samples)
+        # tf.print("cond_mask[0]:", cond_mask[0])
+        # tf.print("target_mask[0]:", target_mask[0])
+
+        cond_mask = tf.cast(cond_mask, dtype=y.dtype)
+        y = y * cond_mask
+        x_clean = x['input_jet'] * target_mask
+
         P_mean = self.P_mean
         P_std = self.P_std
         sigma_data = self.sigma_data
@@ -219,7 +286,6 @@ class PET_jetnet(keras.Model):
             loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
 
             eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-            x_clean = x['input_jet']
             x_noisy = x_clean + sigma * eps
 
             pred = self.edm_preconditioned_network(
@@ -231,19 +297,25 @@ class PET_jetnet(keras.Model):
                 x['input_mask'],
                 y
             )
-            target = x_clean
 
-            per_event_loss = loss_weight * tf.square(pred - target) #(n_event, 8)
+            target = x_clean
+            per_event_loss = loss_weight * tf.square(pred - target) * target_mask
+
+            # 🔹 Debug value stats (only supervised dims)
+            # pred_supervised = tf.boolean_mask(pred, target_mask > 0)
+            # target_supervised = tf.boolean_mask(target, target_mask > 0)
+            # tf.print("Pred mean/std:", tf.reduce_mean(pred_supervised), tf.math.reduce_std(pred_supervised))
+            # tf.print("Target mean/std:", tf.reduce_mean(target_supervised), tf.math.reduce_std(target_supervised))
+
+            # loss_debug = tf.boolean_mask(per_event_loss, target_mask > 0)
+            # tf.print("Loss mean/std:", tf.reduce_mean(loss_debug), tf.math.reduce_std(loss_debug))
+
             if weight is not None:
                 weight = tf.expand_dims(weight, axis=-1)
-                # loss = tf.reduce_sum(weight * per_event_loss) # / tf.reduce_sum(weight)
                 loss = tf.reduce_mean(weight * per_event_loss)
-
-                # tf.print("weight check: ", weight)
             else:
                 loss = tf.reduce_mean(per_event_loss)
 
-            # Safely record scalar stats
             sigma_max_batch = tf.reduce_max(sigma)
             sigma_min_batch = tf.reduce_min(sigma)
             tf.py_function(self._update_sigma_range, [sigma_min_batch, sigma_max_batch], [])
@@ -268,6 +340,25 @@ class PET_jetnet(keras.Model):
         batch_size = tf.shape(x['input_jet'])[0]
         weight = x['input_weight']
 
+        # 🔹 Sample stage for each event
+        stages = tf.random.uniform((batch_size,), minval=0, maxval=3, dtype=tf.int32)
+
+        # 🔹 Count stages
+        z_count = tf.reduce_sum(tf.cast(tf.equal(stages, 0), tf.int32))
+        v1_count = tf.reduce_sum(tf.cast(tf.equal(stages, 1), tf.int32))
+        v2_count = tf.reduce_sum(tf.cast(tf.equal(stages, 2), tf.int32))
+        # tf.print("[Test] Stage counts: Z =", z_count, "v1 =", v1_count, "v2 =", v2_count)
+
+        # 🔹 Generate masks
+        cond_mask, target_mask = self.make_condition_and_target_masks(stages, batch_size, eff_cond=6)
+        # tf.print("[Test] cond_mask[0]:", cond_mask[0])
+        # tf.print("[Test] target_mask[0]:", target_mask[0])
+
+        cond_mask = tf.cast(cond_mask, dtype=y.dtype)
+        y = y * cond_mask
+        x_clean = x['input_jet'] * target_mask
+        x['input_jet'] = x_clean
+
         P_mean = self.P_mean
         P_std = self.P_std
         sigma_data = self.sigma_data
@@ -278,7 +369,6 @@ class PET_jetnet(keras.Model):
         loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
 
         eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-        x_clean = x['input_jet']
         x_noisy = x_clean + sigma * eps
 
         pred = self.edm_preconditioned_network(
@@ -292,10 +382,19 @@ class PET_jetnet(keras.Model):
         )
         target = x_clean
 
-        per_event_loss = loss_weight * tf.square(pred - target)
+        per_event_loss = loss_weight * tf.square(pred - target) * target_mask
+
+        # 🔹 Debug value stats (only supervised dims)
+        pred_supervised = tf.boolean_mask(pred, target_mask > 0)
+        target_supervised = tf.boolean_mask(target, target_mask > 0)
+        # tf.print("[Test] Pred mean/std:", tf.reduce_mean(pred_supervised), tf.math.reduce_std(pred_supervised))
+        # tf.print("[Test] Target mean/std:", tf.reduce_mean(target_supervised), tf.math.reduce_std(target_supervised))
+
+        loss_debug = tf.boolean_mask(per_event_loss, target_mask > 0)
+        # tf.print("[Test] Loss mean/std:", tf.reduce_mean(loss_debug), tf.math.reduce_std(loss_debug))
+
         if weight is not None:
             weight = tf.expand_dims(weight, axis=-1)
-            # loss = tf.reduce_sum(weight * per_event_loss) # / tf.reduce_sum(weight)
             loss = tf.reduce_mean(weight * per_event_loss)
         else:
             loss = tf.reduce_mean(per_event_loss)
@@ -313,7 +412,10 @@ class PET_jetnet(keras.Model):
             particles,
             points,
             mask,
+            data_loader_target_mean,
+            data_loader_target_std,
             use_tqdm=False,
+            use_tqdm_inside=False,
             candidate=10
     ):
         jet_info = []
@@ -324,40 +426,61 @@ class PET_jetnet(keras.Model):
         point_split = np.array_split(points, nsplit)
         cond_split = np.array_split(cond, nsplit)
 
-        self.logger.info(f"Max sigma: {self.sigma_max}, Min sigma: {self.sigma_min}")
+        self.logger.info(f"[IMPORTANT] Max sigma: {self.sigma_max}, Min sigma: {self.sigma_min}")
+        self.logger.info(f"[IMPORTANT] target mean: {data_loader_target_mean}, target std: {data_loader_target_std}")
 
-        # iterable = tqdm(splits,desc='Processing Splits',total=len(splits)) if use_tqdm else splits
-        for i in tqdm(range(nsplit), desc='Processing Splits') if use_tqdm else range(nsplit):
-
+        for i in tqdm(range(nsplit), desc='Processing Splits', position=0, leave=True) if use_tqdm else range(nsplit):
             part = part_split[i]
             mask = mask_split[i]
             point = point_split[i]
-            cond = cond_split[i]
+            cond_init = cond_split[i]
 
-            jet_candidate = []
-            for _ in range(candidate):
-                jet = self.edm_sampler(
-                    part=part,
-                    point=point,
-                    mask=mask,
-                    cond=cond,
-                    model_part=self.model_part,
-                    data_shape=(part.shape[0], self.num_jet),
-                    num_steps=self.num_steps,
-                    sigma_min=self.sigma_min,
-                    sigma_max=self.sigma_max,
-                    rho=self.rho,
-                    S_churn=self.S_churn,
-                    S_min=self.S_min,
-                    S_max=float('inf'),
-                    S_noise=self.S_noise,
-                ).numpy()
+            jets_stage = np.zeros((part.shape[0], candidate, self.num_jet), dtype=np.float32)
 
-                jet_candidate.append(jet)
+            for n in range(candidate):
+                cond = cond_init.copy()
+                cond[:, self.eff_cond:] = 0.0
 
-            total_jets = np.concatenate(jet_candidate, 1)
-            total_jets = np.array(total_jets).reshape(-1, candidate, jet.shape[1])
-            jet_total.append(total_jets)
+                stage_bar = tqdm(
+                    enumerate([(0, 2), (2, 5), (5, 8)]),
+                    total=3,
+                    desc=f"Split {i} - Candidate {n}",
+                    position=1, leave=False
+                ) if use_tqdm_inside else enumerate([(0, 2), (2, 5), (5, 8)])
+
+                for stage, (start, end) in stage_bar:
+                    num_steps_stage = self.num_steps * (stage + 1)
+
+                    jet = self.edm_sampler(
+                        part=part,
+                        point=point,
+                        mask=mask,
+                        cond=cond,
+                        model_part=self.model_part,
+                        data_shape=(part.shape[0], self.num_jet),
+                        num_steps=num_steps_stage,
+                        sigma_min=self.sigma_min,
+                        sigma_max=self.sigma_max,
+                        rho=self.rho,
+                        S_churn=self.S_churn,
+                        S_min=self.S_min,
+                        S_max=float('inf'),
+                        S_noise=self.S_noise,
+                    ).numpy()
+
+                    if stage > 0:
+                        jet = jet * data_loader_target_std + data_loader_target_mean
+
+                    jets_stage[:, n, start:end] = jet[:, start:end]
+
+                    if self.eff_cond + end < cond.shape[-1]:
+                        cond[:, self.eff_cond + start:self.eff_cond + end] = jet[:, start:end]
+
+                if use_tqdm_inside:
+                    stage_bar.close()
+
+            jet_total.append(jets_stage)
+
         return np.concatenate(jet_total)
 
     def logsnr_schedule_cosine(self, t, logsnr_min=-20., logsnr_max=20.):

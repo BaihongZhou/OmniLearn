@@ -20,7 +20,7 @@ def signed_log1p(x):
     return np.sign(x) * np.log1p(np.abs(x))
 
 
-def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
+def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, truth_nu=None):
     taus = vector.arr({
         "pt": taus[..., 0],
         "eta": taus[..., 1],
@@ -35,42 +35,20 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     })
 
     tau1, tau2 = taus[:, 0], taus[:, 1]
-    # jets = [jets[:, i] for i in range(jets.shape[1])]
-    tau1_pt = tau1.pt
-    tau2_pt = tau2.pt
     HT_Tau = tau1.pt + tau2.pt
     deltaR_tau = tau1.deltaR(tau2)
-
-    met_deltaphi_tau1 = met.deltaphi(tau1)
-    met_deltaphi_tau2 = met.deltaphi(tau2)
 
     MET_sig_tau = met.pt / np.sqrt(HT_Tau + 1e-6)
 
     met_balance = met.pt / (tau1.pt + tau2.pt + 1e-6)
-    met_balance_1 = met.pt / (tau1.pt + 1e-6)
-    met_balance_2 = met.pt / (tau2.pt + 1e-6)
 
     all_inputs = {
         "met_pt": np.log1p(met.pt),
         "met_phi": met.phi,
         "HT_Tau": np.log1p(HT_Tau),
         "MET_sig_tau": np.log1p(MET_sig_tau),
-        # "tau1_pt": tau1_pt,
-        # "tau2_pt": tau2_pt,
         "deltaR_tau": deltaR_tau,
-        # "met_deltaphi_tau1": met_deltaphi_tau1,
-        # "met_deltaphi_tau2": met_deltaphi_tau2,
-        # "HT_Jet": np.log1p(HT_Jet),
-        # "MET_sig_jet": np.log1p(MET_sig_jet),
-
         "met_balance": met_balance,
-        # "met_balance_1": met_balance_1,
-        # "met_balance_2": met_balance_2,
-
-        # "mean_jet_pt": mean_jet.pt,
-        # "mean_jet_eta": mean_jet.eta,
-        # "mean_jet_phi": mean_jet.phi,
-        # "mean_jet_energy": mean_jet.energy,
     }
 
     if jets is not None:
@@ -93,7 +71,39 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
             "mean_jet_pt": mean_jet.pt,
         })
 
-    def corr(x, y): return np.corrcoef(x, y)[0, 1]
+    effective_cond = len(all_inputs)
+
+    if truth_nu is not None:
+        truth_nu1 = vector.arr({
+            "pt": truth_nu[:, 0],
+            "eta": truth_nu[:, 1],
+            "phi": truth_nu[:, 2],
+        })
+
+        truth_nu2 = vector.arr({
+            "pt": truth_nu[:, 3],
+            "eta": truth_nu[:, 4],
+            "phi": truth_nu[:, 5],
+        })
+
+        all_inputs.update({
+            # first stage: predict latent vector Z
+            "dR_tau1_nu1": tau1.deltaR(truth_nu1),
+            "dR_tau2_nu2": tau2.deltaR(truth_nu2),
+
+            # second stage: predict nu1
+            "nu1_pt": truth_nu1.pt,
+            "nu1_eta": truth_nu1.eta,
+            "nu1_phi": truth_nu1.phi,
+
+            # third stage: predict nu2
+            "nu2_pt": truth_nu2.pt,
+            "nu2_eta": truth_nu2.eta,
+            "nu2_phi": truth_nu2.phi,
+        })
+
+    def corr(x, y):
+        return np.corrcoef(x, y)[0, 1]
 
     # nu1_pt = nu[:, 0]
     # nu2_pt = nu[:, 3]
@@ -107,12 +117,12 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0):
     condition_vector = np.stack([v for v in selected_inputs.values()], axis=1)
     all_inputs_name = list(selected_inputs.keys())
 
-    return condition_vector, all_inputs_name
+    return condition_vector, all_inputs_name, effective_cond
 
 
 def calculate_correlations(cond_vec, nu, input_names):
     truth_nu1_pt = nu[:, 0]
-    truth_nu2_pt = nu[:, 4]
+    truth_nu2_pt = nu[:, 3]
 
     names = input_names
 
@@ -125,58 +135,6 @@ def calculate_correlations(cond_vec, nu, input_names):
     for i, name in enumerate(names):
         corr = np.corrcoef(truth_nu2_pt, cond_vec[:, i])[0, 1]
         print(f"  {name:20}: {corr:.3f}")
-
-
-def build_extra_targets(
-        data,
-        x1_name: str = 'Tau1',
-        x2_name: str = 'Tau2',
-        met_name: str = 'met',
-        truth_name: str = 'truth_TauTau'
-):
-    x1 = vector.arr({
-        "pt": data[x1_name][:, 0],
-        "eta": data[x1_name][:, 1],
-        "phi": data[x1_name][:, 2],
-        "mass": data[x1_name][:, 3]
-    }).to_pxpypzenergy()
-    x2 = vector.arr({
-        "pt": data[x2_name][:, 0],
-        "eta": data[x2_name][:, 1],
-        "phi": data[x2_name][:, 2],
-        "mass": data[x2_name][:, 3]
-    }).to_pxpypzenergy()
-    met = vector.arr({
-        "pt": data[met_name][:, 0],
-        "phi": data[met_name][:, 1],
-        "eta": np.zeros_like(data[met_name][:, 0]),
-        "mass": np.zeros_like(data[met_name][:, 0])
-    }).to_pxpypzenergy()
-    truth_sum = vector.arr({
-        "pt": data[truth_name][:, 0],
-        "eta": data[truth_name][:, 1],
-        "phi": data[truth_name][:, 2],
-        "mass": data[truth_name][:, 3]
-    }).to_pxpypzenergy()
-
-    # sum_metx1x2 = met + x1 + x2
-    sum_metx1x2 = x1 + x2
-
-    diff = np.array([
-        truth_sum.px - sum_metx1x2.px,
-        truth_sum.py - sum_metx1x2.py,
-        truth_sum.pz - sum_metx1x2.pz,
-        truth_sum.energy - sum_metx1x2.energy
-    ])
-
-    # diff = np.array([
-    #     truth_sum.pt,
-    #     truth_sum.eta,
-    #     truth_sum.phi,
-    #     truth_sum.energy,
-    # ])
-
-    return diff.T
 
 
 def process(
@@ -288,7 +246,7 @@ def process(
     Extra = np.vstack(Extra)
     weight = np.vstack(weight)
 
-    if not features['jet'].get('drop', False):
+    if not features['jet'].get('drop', True):
         jet_start_index = len(features['tau_vis']['particles'])
         if features['jet'].get('merge_jet', False):
             mask = X[:, jet_start_index:, 0] > 0
@@ -311,31 +269,22 @@ def process(
         # Assuming first 2 particles = tau_vis → jets start from index 2
         jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
         tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
-        y, input_names = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y)
+        y, input_names, eff_cond = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu)
         calculate_correlations(y, nu, input_names)
     else:
         X = X[:, :len(features['tau_vis']['particles'])]
-        y, input_names = build_condition_vector(jets=None, taus=X, y_met=y)
+        y, input_names, eff_cond = build_condition_vector(jets=None, taus=X, y_met=y, truth_nu=nu)
         calculate_correlations(y, nu, input_names)
+
+    # Casual Mask
+    nu = y[:, eff_cond:]
+    y = y[:, :-3]  # remove nu2 from conditioning
 
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt
     X[:, :, 3] = np.log1p(X[:, :, 3])  # energy
-    # nu[:, 0] = np.log1p(nu[:, 0])  # nu1 pt
-    # nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
-    # nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt
-    # nu[:, 7] = np.log1p(nu[:, 7])  # nu2 energy
-    # nu[:, 8] = signed_log1p(nu[:, 8])  # truth_tautau - (tau1 + tau2) px
-    # nu[:, 9] = signed_log1p(nu[:, 9])  # truth_tautau - (tau1 + tau2) py
-    # nu[:, 10] = signed_log1p(nu[:, 10])  # truth_tautau - (tau1 + tau2) pz
-    # nu[:, 11] = signed_log1p(nu[:, 11])  # truth_tautau - (tau1 + tau2) energy
-
-    nu[:, 4] = signed_log1p(nu[:, 0] - nu[:, 4])  # nu2 pt
-    nu[:, 5] = nu[:, 1] - nu[:, 5]  # nu2 eta
-    nu[:, 6] = nu[:, 2] - nu[:, 6]  # nu2 phi
-    nu[:, 7] = signed_log1p(nu[:, 3] - nu[:, 7])  # nu2 energy
-    nu[:, 0] = np.log1p(nu[:, 0])  # nu1 pt
-    nu[:, 3] = np.log1p(nu[:, 3])  # nu1 energy
+    nu[:, 2] = np.log1p(nu[:, 2])  # nu1 pt, y will also change
+    nu[:, 5] = np.log1p(nu[:, 5])  # nu2 pt, y will also change
 
     if for_training:
         # Indices to compute mean and std
@@ -346,7 +295,7 @@ def process(
             particle_mean[idx] = np.mean(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
             particle_std[idx] = np.std(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
 
-        selected_indices = [0, 3, 4, 7] # + [8, 9, 10, 11]
+        selected_indices = [2, 5]
         nu_mean = np.zeros(nu.shape[1])
         nu_std = np.ones(nu.shape[1])
         for idx in selected_indices:

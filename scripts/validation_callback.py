@@ -17,48 +17,39 @@ def inverse_signed_log1p(y):
     return np.sign(y) * (np.expm1(np.abs(y)))
 
 
-def evaluate_distribution(pred_nu, truth_nu, epoch, save_plots, logger=None, weights=None):
+def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, logger=None, weights=None):
     if hvd.rank() == 0:
         import wandb
 
     results = {}
-
     logger.info("[Eval Distribution] Evaluating neutrino distributions")
 
-    for i in range(2):  # for nu1 and nu2
+    for i, (pred, truth) in enumerate([(nu1, truth_nu1), (nu2, truth_nu2)]):
         prefix = f"nu{i + 1}"
-        pred = pred_nu[:, i, :]  # shape (N, 4)
-        truth = truth_nu[:, i, :]
 
-        logger.info(f"[Eval Distribution] nu {i} --> pred shape: {pred.shape}, truth shape: {truth.shape}")
+        logger.info(f"[Eval Distribution] {prefix} --> pred shape: {pred.shape}, truth shape: {truth.shape}")
 
-        for j, name in enumerate(["pt", "eta", "phi"]):
-            x = pred[:, j].ravel()
-            y = truth[:, j].ravel()
+        for name in ["pt", "eta", "phi", "energy"]:
+            x = getattr(pred, name)
+            y = getattr(truth, name)
 
-            # Log EMD & Pearson
             results[f"{prefix}/EMD_{name}"] = wasserstein_distance(x, y)
             results[f"{prefix}/Pearson_{name}"] = pearsonr(x, y)[0]
 
             if save_plots:
-                # Define bounded range (1.5× range of truth)
                 min_truth, max_truth = np.min(y), np.max(y)
                 truth_range = max_truth - min_truth
-                buffer = 0.25 * truth_range  # extra 0.5× range split evenly on both sides
+                buffer = 0.25 * truth_range
                 low = min_truth - buffer
                 high = max_truth + buffer
 
-                # Create bins including underflow/overflow
                 n_bins = 51
-                bins = np.linspace(low, high, n_bins - 2)  # exclude 2 bins to add first/last manually
-                bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])  # add extreme edges for over/underflow
-
-                # Compute histograms
+                bins = np.linspace(low, high, n_bins - 2)
+                bins = np.concatenate([[low - 1e10], bins, [high + 1e10]])
                 hist_pred, _ = np.histogram(x, bins=bins, density=True)
                 hist_truth, _ = np.histogram(y, bins=bins, density=True, weights=weights)
                 bin_centers = 0.5 * (bins[1:] + bins[:-1])
 
-                # Plot
                 fig, ax = plt.subplots()
                 ax.step(bin_centers, hist_pred, where='mid', label='pred', linewidth=1.5)
                 ax.step(bin_centers, hist_truth, where='mid', label='truth', linewidth=1.5)
@@ -137,6 +128,39 @@ def log_vector_distribution(
                 logger.info(f"[EvalCallback] --> Saved {name} {k}{suffix} distribution plot")
 
 
+def log_dR_distribution(dR_pred_1, dR_pred_2, dR_truth_1, dR_truth_2, epoch, logger=None, weights=None):
+    if hvd.rank() == 0:
+        import wandb
+
+    for i, (dR_pred, dR_truth) in enumerate([
+        (dR_pred_1, dR_truth_1),
+        (dR_pred_2, dR_truth_2)
+    ]):
+        name = f"dR_nu_tau_{i + 1}"
+
+        min_val, max_val = np.min(dR_truth), np.max(dR_truth)
+        span = max_val - min_val
+        low, high = min_val - 0.15 * span, max_val + 0.15 * span
+        # low = max(low, 0)
+
+        bins = np.linspace(low, high, 101)
+        hist_pred, _ = np.histogram(dR_pred, bins=bins, density=True)
+        hist_truth, _ = np.histogram(dR_truth, bins=bins, density=True, weights=weights)
+        bin_centers = 0.5 * (bins[1:] + bins[:-1])
+
+        fig, ax = plt.subplots()
+        ax.step(bin_centers, hist_pred, where='mid', label='pred', linewidth=1.5)
+        ax.step(bin_centers, hist_truth, where='mid', label='truth', linewidth=1.5, linestyle='--')
+        ax.set_title(f"{name} @ epoch {epoch}")
+        ax.grid(True)
+        ax.legend()
+        wandb.log({f"other/{name}": wandb.Image(fig)})
+        plt.close(fig)
+
+        if logger:
+            logger.info(f"[EvalCallback] --> Saved {name} distribution plot")
+
+
 def unpack_tfdata(val_dataset, max_events=10000, logger=None):
     part_list, point_list, mask_list, met_list, truth_list = [], [], [], [], []
     total_events = 0
@@ -208,12 +232,15 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             mask=mask,
             use_tqdm=True,
             candidate=1,
+            data_loader_target_mean=self.val_dataloader.mean_jet,
+            data_loader_target_std=self.val_dataloader.std_jet,
         )
 
-        num_nu = 2
+        # num_nu = 2
 
-        pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu, 4)
-        truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu).reshape(-1, num_nu, 4)
+        # pred_nu = self.val_dataloader.revert_preprocess_neutrino(gen_nu[:, 0, :]).reshape(-1, num_nu, 4)
+        pred_nu = gen_nu[:, 0, :]
+        truth_nu = self.val_dataloader.revert_preprocess_neutrino(truth_nu)
 
         # Convert vector arrays to plain numpy before allgather
         tau1_array = np.stack([extra[:, 2], extra[:, 3], extra[:, 4], extra[:, 5]], axis=1)
@@ -249,37 +276,37 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
         })
 
         truth_nu1 = vector.arr({
-            "pt": np.expm1(truth_nu[:, 0, 0]),
-            "eta": truth_nu[:, 0, 1],
-            "phi": truth_nu[:, 0, 2],
-            "energy": np.expm1(truth_nu[:, 0, 3]),
+            "pt": np.expm1(truth_nu[:, 2]),
+            "eta": truth_nu[:, 3],
+            "phi": truth_nu[:, 4],
+            "mass": np.zeros_like(truth_nu[:, 2]),
         })
-
         truth_nu2 = vector.arr({
-            "pt": np.expm1(truth_nu[:, 1, 0]),
-            "eta": truth_nu[:, 1, 1],
-            "phi": truth_nu[:, 1, 2],
-            "energy": np.expm1(truth_nu[:, 1, 3]),
+            "pt": np.expm1(truth_nu[:, 5]),
+            "eta": truth_nu[:, 6],
+            "phi": truth_nu[:, 7],
+            "mass": np.zeros_like(truth_nu[:, 2]),
         })
 
         nu1 = vector.arr({
-            "pt": np.expm1(pred_nu[:, 0, 0]),
-            "eta": pred_nu[:, 0, 1],
-            "phi": pred_nu[:, 0, 2],
-            "energy": np.expm1(pred_nu[:, 0, 3]),
+            "pt": np.expm1(pred_nu[:, 2]),
+            "eta": pred_nu[:, 3],
+            "phi": pred_nu[:, 4],
+            "mass": np.zeros_like(pred_nu[:, 2]),
         })
         nu2 = vector.arr({
-            "pt": np.expm1(pred_nu[:, 0, 0]) - inverse_signed_log1p(pred_nu[:, 1, 0]) ,
-            "eta": pred_nu[:, 0, 1] - pred_nu[:, 1, 1],
-            "phi": pred_nu[:, 0, 2] - pred_nu[:, 1, 2],
-            "energy":  np.expm1(pred_nu[:, 0, 3]) - inverse_signed_log1p(pred_nu[:, 1, 3]),
+            "pt": np.expm1(pred_nu[:, 5]),
+            "eta": pred_nu[:, 6],
+            "phi": pred_nu[:, 7],
+            "mass": np.zeros_like(pred_nu[:, 2]),
         })
-        # tautau_diff = vector.arr({
-        #     "px": inverse_signed_log1p(pred_nu[:, 2, 0]),
-        #     "py": inverse_signed_log1p(pred_nu[:, 2, 1]),
-        #     "pz": inverse_signed_log1p(pred_nu[:, 2, 2]),
-        #     "energy": inverse_signed_log1p(pred_nu[:, 2, 3]),
-        # })
+
+        dR_nu_tau_1 = pred_nu[:, 0]
+        dR_nu_tau_2 = pred_nu[:, 1]
+        # truth_dR_nu_tau_1 = tau1.deltaR(truth_nu1)
+        # truth_dR_nu_tau_2 = tau2.deltaR(truth_nu2)
+        truth_dR_nu_tau_1 = truth_nu[:, 0]
+        truth_dR_nu_tau_2 = truth_nu[:, 1]
 
         tau1_full = tau1 + nu1
         tau2_full = tau2 + nu2
@@ -298,7 +325,14 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             unique_file_map = {v: k for k, v in self.val_dataloader.unique_file_map.items()}
             self.logger.info(f"[EvalCallback] Rank: {hvd.rank()} -- Unique files: {len(unique_file_map)}")
 
-            results = evaluate_distribution(pred_nu, truth_nu, epoch, logger=self.logger, save_plots=save_plots, weights=weight)
+            results = evaluate_distribution(
+                nu1=nu1, nu2=nu2,
+                truth_nu1=truth_nu1, truth_nu2=truth_nu2,
+                epoch=epoch,
+                save_plots=save_plots,
+                logger=self.logger,
+                weights=weight,
+            )
             if save_plots:
                 log_vector_distribution(
                     tautau_nu_pred, tautau_truth,
@@ -306,6 +340,16 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
                     weight=weight,
                     raw_file=raw_file, raw_file_label_map=unique_file_map,
                     logger=self.logger,
+                )
+
+                log_dR_distribution(
+                    dR_pred_1=dR_nu_tau_1,
+                    dR_pred_2=dR_nu_tau_2,
+                    dR_truth_1=truth_dR_nu_tau_1,
+                    dR_truth_2=truth_dR_nu_tau_2,
+                    epoch=epoch,
+                    logger=self.logger,
+                    weights=weight,
                 )
 
                 # log_vector_distribution(

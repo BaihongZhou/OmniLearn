@@ -121,7 +121,6 @@ def main():
     optimizer_head = configure_optimizers(train_loader, lr_factor=1)
     model.compile(optimizer_body, optimizer_head)
     callbacks = [
-        # SigmaStatsCallback(model=model),
         EarlyStopping(patience=45, restore_best_weights=True),
         ReduceLROnPlateau(monitor='val_loss', patience=15, min_lr=1e-8, min_delta=1e-4),
         DiffusionValidationCallback(

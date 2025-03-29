@@ -165,8 +165,9 @@ class TauReconDataLoader(DataLoader):
                                 f"  [{idx}] {index_to_filename[idx]} -> mean weight: {avg_weight:.3f}, N = {len(assigned_weights)}")
 
             # self.weight = event_weight * sample_weight
-            self.weight = event_weight
+            # self.weight = event_weight
             # self.weight = sample_weight
+            self.weight = None
         else:
             self.weight = None
 
@@ -219,7 +220,7 @@ class TauReconDataLoader(DataLoader):
             self.logger.info(f"input_points shape: {X[:, :, 1:3].shape}")
             self.logger.info(f"input_mask shape: {self.mask.shape}")
             self.logger.info(f"target shape: {neutrino.shape}")
-            self.logger.info(f"input_weight shape: {self.weight.shape}")
+            # self.logger.info(f"input_weight shape: {self.weight.shape}")
             self.logger.info(f"input_file shape: {self.raw_file.shape}")
 
         tf_global_cond = tf.data.Dataset.from_tensor_slices(self.global_cond)

@@ -653,8 +653,10 @@ class PET_jetnet(keras.Model):
             t_hat = tf.ones((batch_size, 1), dtype=tf.float32) * tf.reshape(t_hat_scalar, [])
 
             x_cur = x_next
-            x_hat = x_cur + tf.sqrt(t_hat_scalar ** 2 - t_cur ** 2) * S_noise * tf.random.normal(data_shape,
-                                                                                                 dtype=tf.float32)
+            x_hat = x_cur + tf.sqrt(t_hat_scalar ** 2 - t_cur ** 2) * S_noise * tf.random.normal(
+                data_shape,
+                dtype=tf.float32
+            )
 
             denoised = self.edm_preconditioned_network(model_part, x_hat, t_hat, part, point, mask, cond)
             d_cur = (x_hat - denoised) / t_hat_scalar

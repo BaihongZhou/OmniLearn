@@ -39,12 +39,11 @@ def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, log
                 results[f"{prefix}/EMD_{name}"] = np.nan
                 if logger:
                     logger.warning(f"[Eval] Invalid input for EMD in {prefix} {name}")
-                    
+
             # Ensure finite values only
             if not (np.isfinite(x).all() and np.isfinite(y).all()):
                 if logger:
                     logger.warning(f"[Eval] Non-finite values in {prefix} {name}, skipping metric.")
-                continue
 
             # Avoid zero-variance crash
             if np.std(x) == 0 or np.std(y) == 0:

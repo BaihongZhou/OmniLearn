@@ -191,36 +191,36 @@ class PET_jetnet(keras.Model):
 
     def make_condition_and_target_masks(self, stages, batch_size, eff_cond):
         # Create dynamic mask for [z1, z2, v11, v12, v13]
-        dyn_mask = tf.zeros((batch_size, 5), dtype=tf.float32)
-        target_mask = tf.zeros((batch_size, 8), dtype=tf.float32)
+        dyn_mask = tf.zeros((batch_size, 4), dtype=tf.float32)
+        target_mask = tf.zeros((batch_size, 7), dtype=tf.float32)
 
         # Stage Z
         target_mask += tf.where(
             tf.equal(stages[:, None], 0),
-            tf.concat([tf.ones((batch_size, 2)), tf.zeros((batch_size, 6))], axis=1),
+            tf.concat([tf.ones((batch_size, 1)), tf.zeros((batch_size, 6))], axis=1),
             tf.zeros_like(target_mask)
         )
 
         # Stage v1
         dyn_mask += tf.where(
             tf.equal(stages[:, None], 1),
-            tf.concat([tf.ones((batch_size, 2)), tf.zeros((batch_size, 3))], axis=1),
+            tf.concat([tf.ones((batch_size, 1)), tf.zeros((batch_size, 3))], axis=1),
             tf.zeros_like(dyn_mask)
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 1),
-            tf.concat([tf.zeros((batch_size, 2)), tf.ones((batch_size, 3)), tf.zeros((batch_size, 3))], axis=1),
+            tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 3)), tf.zeros((batch_size, 3))], axis=1),
             tf.zeros_like(target_mask)
         )
 
         # Stage v2
         dyn_mask += tf.where(
             tf.equal(stages[:, None], 2),
-            tf.ones((batch_size, 5)), tf.zeros_like(dyn_mask)
+            tf.ones((batch_size, 4)), tf.zeros_like(dyn_mask)
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 2),
-            tf.concat([tf.zeros((batch_size, 5)), tf.ones((batch_size, 3))], axis=1),
+            tf.concat([tf.zeros((batch_size, 4)), tf.ones((batch_size, 3))], axis=1),
             tf.zeros_like(target_mask)
         )
 
@@ -442,11 +442,11 @@ class PET_jetnet(keras.Model):
                 cond[:, self.eff_cond:] = 0.0
 
                 stage_bar = tqdm(
-                    enumerate([(0, 2), (2, 5), (5, 8)]),
+                    enumerate([(0, 1), (1, 4), (4, 7)]),
                     total=3,
                     desc=f"Split {i} - Candidate {n}",
                     position=1, leave=False
-                ) if use_tqdm_inside else enumerate([(0, 2), (2, 5), (5, 8)])
+                ) if use_tqdm_inside else enumerate([(0, 1), (1, 4), (4, 7)])
 
                 for stage, (start, end) in stage_bar:
                     num_steps_stage = self.num_steps * (stage + 1)

@@ -7,11 +7,7 @@ import sys
 import os
 import tensorflow as tf
 import gc
-import random
-import itertools
-import pickle, copy
-from scipy.stats import norm
-import glob
+from sklearn.preprocessing import QuantileTransformer
 
 #### Horovod imports
 try:
@@ -107,6 +103,7 @@ class TauReconDataLoader(DataLoader):
             sample_norm: dict,
             batch_size=512, rank=0, size=1, nevts=None,
             sample_weight_map: dict[str, float] = None,
+            mass_transform: QuantileTransformer = None,
     ):
         super().__init__(path, batch_size, rank, size)
         in_file = h5.File(self.path, 'r')
@@ -187,6 +184,8 @@ class TauReconDataLoader(DataLoader):
 
         self.steps_per_epoch = None  # will pass none, otherwise needs to add repeat to tf data
         self.files = [path]
+
+        self.mass_transform = mass_transform
 
     def make_eval_data(self, preprocess=False):
         if preprocess:

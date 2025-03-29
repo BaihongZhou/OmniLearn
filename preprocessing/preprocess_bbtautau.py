@@ -15,12 +15,14 @@ import vector
 from configs.global_config import load_config, save_config
 import configs.global_config as config
 
+from sklearn.preprocessing import QuantileTransformer
+
 
 def signed_log1p(x):
     return np.sign(x) * np.log1p(np.abs(x))
 
 
-def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, truth_nu=None):
+def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, truth_nu=None, truth_mass=None):
     taus = vector.arr({
         "pt": taus[..., 0],
         "eta": taus[..., 1],
@@ -48,7 +50,7 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, tr
         "HT_Tau": np.log1p(HT_Tau),
         "MET_sig_tau": np.log1p(MET_sig_tau),
         "deltaR_tau": deltaR_tau,
-        "met_balance": met_balance,
+        "met_balance": np.log1p(met_balance),
     }
 
     if jets is not None:
@@ -74,6 +76,7 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, tr
     effective_cond = len(all_inputs)
 
     if truth_nu is not None:
+
         truth_nu1 = vector.arr({
             "pt": truth_nu[:, 0],
             "eta": truth_nu[:, 1],
@@ -90,8 +93,10 @@ def build_condition_vector(jets, taus, y_met, jet_pt_threshold: float = 10.0, tr
 
         all_inputs.update({
             # first stage: predict latent vector Z
-            "dR_tau1_nu1": tau1.deltaR(truth_nu1),
-            "dR_tau2_nu2": tau2.deltaR(truth_nu2),
+            # "dR_tau1_nu1": tau1.deltaR(truth_nu1),
+            # "dR_tau2_nu2": tau2.deltaR(truth_nu2),
+
+            "mass_tautau": truth_mass,
 
             # second stage: predict nu1
             "nu1_pt": truth_nu1.pt,
@@ -144,6 +149,7 @@ def process(
         sample_lists: list[str], features: dict, train_ratio: float = 0.8,
         overwrite: bool = False,
         for_training: bool = True,
+        train_mass_transform: QuantileTransformer = None,
 ):
     def save_hdf5(file_path, col_names, data, mode="train"):
         with h5.File(file_path, "w") as f:
@@ -167,6 +173,7 @@ def process(
         if train_file.exists() and not overwrite:
             print(f"Skipping processing data: {train_file} already exists")
             return
+
 
     X = {}
     nu = {}
@@ -239,14 +246,19 @@ def process(
 
                     X.setdefault(particle, []).append(np.hstack(particle_features))
 
-            # diff = build_extra_targets(data)
-            # nu.setdefault('diff', []).append(diff)
-
     X = np.concatenate([np.vstack(parts)[:, None, :] for parts in X.values()], axis=1)
     nu = np.concatenate([np.vstack(parts) for parts in nu.values()], axis=1)
     y = np.vstack(y)
     Extra = np.vstack(Extra)
     weight = np.vstack(weight)
+
+    truth_mass = Extra[:, -1]
+
+    if train_mass_transform is None:
+        train_mass_transform = QuantileTransformer(output_distribution='normal', n_quantiles=1000)
+    else:
+        train_mass_transform = train_mass_transform
+    mass_qt = train_mass_transform.fit_transform(truth_mass.reshape(-1, 1)).flatten()
 
     if not features['jet'].get('drop', True):
         jet_start_index = len(features['tau_vis']['particles'])
@@ -271,11 +283,11 @@ def process(
         # Assuming first 2 particles = tau_vis → jets start from index 2
         jets_X = X[:, jet_start_index:, :4]  # shape: (n_events, n_jets, 4)
         tau_X = X[:, :jet_start_index, :4]  # shape: (n_events, n_tau_vis, 4)
-        y, input_names, eff_cond = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu)
+        y, input_names, eff_cond = build_condition_vector(jets=jets_X, taus=tau_X, y_met=y, truth_nu=nu, truth_mass=mass_qt)
         calculate_correlations(y, nu, input_names)
     else:
         X = X[:, :len(features['tau_vis']['particles'])]
-        y, input_names, eff_cond = build_condition_vector(jets=None, taus=X, y_met=y, truth_nu=nu)
+        y, input_names, eff_cond = build_condition_vector(jets=None, taus=X, y_met=y, truth_nu=nu, truth_mass=mass_qt)
         calculate_correlations(y, nu, input_names)
 
     # Casual Mask
@@ -285,8 +297,8 @@ def process(
     # convert pt and energy to log(x + 1)
     X[:, :, 0] = np.log1p(X[:, :, 0])  # pt
     X[:, :, 3] = np.log1p(X[:, :, 3])  # energy
-    nu[:, 2] = np.log1p(nu[:, 2])  # nu1 pt, y will also change
-    nu[:, 5] = np.log1p(nu[:, 5])  # nu2 pt, y will also change
+    nu[:, 1] = np.log1p(nu[:, 1])  # nu1 pt, y will also change
+    nu[:, 4] = np.log1p(nu[:, 4])  # nu2 pt, y will also change
 
     if for_training:
         # Indices to compute mean and std
@@ -297,7 +309,7 @@ def process(
             particle_mean[idx] = np.mean(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
             particle_std[idx] = np.std(X[:, :, idx], axis=(0, 1), where=X[:, :, idx] != 0)
 
-        selected_indices = [2, 5]
+        selected_indices = [1, 4]
         nu_mean = np.zeros(nu.shape[1])
         nu_std = np.ones(nu.shape[1])
         for idx in selected_indices:
@@ -342,7 +354,7 @@ def process(
             mode="evaluation"
         )
 
-    return norm_dict
+    return norm_dict, train_mass_transform
 
 
 def main():
@@ -356,6 +368,7 @@ def main():
     np.random.seed(42)
 
     train_norm_dict = None
+    train_mass_transform = None
 
     for data_type, cfg in config.cfg['preprocess'].items():
         data_path = Path(cfg['raw_folder']).absolute()
@@ -368,12 +381,18 @@ def main():
         sample_lists = cfg['sample_list']
         features = config.cfg['features']
 
-        norm_dict = process(
+        norm_dict, train_mass_transform = process(
             data_path=data_path, save_path=save_path, save_tag=save_tag,
             sample_lists=sample_lists, features=features, train_ratio=0.8,
             overwrite=cfg['overwrite'],
             for_training=cfg.get('for_training', False),
+            train_mass_transform=train_mass_transform,
         )
+
+        if data_type == 'training':
+            mass_transform_file = save_path / f"mass_transform.pkl"
+            with open(mass_transform_file, 'wb') as f:
+                pickle.dump(train_mass_transform, f)
 
         if norm_dict:
             if cfg.get('for_training', False):

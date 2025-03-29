@@ -6,7 +6,7 @@ current_file_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(current_file_path)
 
 import numpy as np
-
+import pickle
 import argparse
 import logging
 import wandb
@@ -45,6 +45,9 @@ def parse_arguments():
 def get_data_loader():
     dataset = None
     if config.cfg['dataset'] == 'bbtautau':
+        with open(Path(config.cfg['sample']['base_folder']) / "mass_transform.pkl", "rb") as f:
+            mass_transform = pickle.load(f)
+
         dataset = [
             utils.TauReconDataLoader(
                 path=Path(config.cfg['sample']['base_folder']) / f"{config.cfg['sample']['tag']}_{dataset_type}.hdf5",
@@ -54,6 +57,7 @@ def get_data_loader():
                 size=hvd.size(),
                 nevts=config.cfg['sample']['n_events'] if config.cfg['sample']['n_events'] > 0 else None,
                 sample_weight_map=config.cfg['features']['weight']['sample'],
+                mass_transform=mass_transform
             )
 
             for dataset_type in ['train', 'test']

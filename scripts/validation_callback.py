@@ -6,6 +6,19 @@ import matplotlib.pyplot as plt
 from scipy.stats import wasserstein_distance, pearsonr
 from scipy.spatial.distance import cdist
 
+from matplotlib.colors import LinearSegmentedColormap
+
+# Define your RGB colors (normalized to [0,1])
+color0 = [255 / 255, 255 / 255, 255 / 255]  # #ffffff
+color1 = [91 / 255, 181 / 255, 172 / 255]  # #5bb5ac
+color2 = [216 / 255, 179 / 255, 101 / 255]  # #d8b365
+color3 = [222 / 255, 82 / 255, 108 / 255]  # #de526c
+
+# Create custom colormap
+custom_cmap = LinearSegmentedColormap.from_list(
+    'custom_gradient', [color0, color1, color2, color3]
+)
+
 #### Horovod imports
 try:
     import horovod.tensorflow.keras as hvd
@@ -63,6 +76,14 @@ def evaluate_distribution(nu1, nu2, truth_nu1, truth_nu2, epoch, save_plots, log
                 min_val, max_val = np.min(y), np.max(y)
                 span = max_val - min_val
                 low, high = min_val - 0.25 * span, max_val + 0.25 * span
+
+                if name == "mass":
+                    low, high = 40, 250
+                if name == "pt":
+                    low, high = 0, 250
+                if name == "energy":
+                    low, high = 0, 750
+
                 bins = np.linspace(low, high, 51)
                 hist_pred, _ = np.histogram(x, bins=bins, density=True)
                 hist_truth, _ = np.histogram(y, bins=bins, density=True, weights=w)
@@ -149,11 +170,21 @@ def log_dR_distribution(dR_pred_1, dR_pred_2, dR_truth_1, dR_truth_2, epoch, log
     if hvd.rank() == 0:
         import wandb
 
+    results = {}
     for i, (dR_pred, dR_truth) in enumerate([
         (dR_pred_1, dR_truth_1),
         (dR_pred_2, dR_truth_2)
     ]):
-        name = f"dR_nu_tau_{i + 1}"
+        if dR_pred is None:
+            continue
+
+        dR_pred = np.ravel(dR_pred)
+        dR_truth = np.ravel(dR_truth)
+
+        name = f"nu_tau_{i + 1}"
+
+        results[f"other/Pearson_{name}"] = pearsonr(dR_pred, dR_truth)[0]
+        results[f"other/EMD_{name}"] = wasserstein_distance(dR_pred, dR_truth)
 
         min_val, max_val = np.min(dR_truth), np.max(dR_truth)
         span = max_val - min_val
@@ -174,8 +205,20 @@ def log_dR_distribution(dR_pred_1, dR_pred_2, dR_truth_1, dR_truth_2, epoch, log
         wandb.log({f"other/{name}": wandb.Image(fig)})
         plt.close(fig)
 
+        fig, ax = plt.subplots()
+        h = ax.hist2d(dR_truth, dR_pred, bins=100, range=[[low, high], [low, high]], cmap=custom_cmap, density=True)
+        fig.colorbar(h[3], ax=ax)
+        ax.set_xlabel("Truth")
+        ax.set_ylabel("Prediction")
+        ax.set_title(f"{name} 2D Histogram @ epoch {epoch}")
+        ax.grid(True)
+        wandb.log({f"other/2Dhist_{name}": wandb.Image(fig)})
+        plt.close(fig)
+
         if logger:
             logger.info(f"[EvalCallback] --> Saved {name} distribution plot")
+
+    wandb.log(results)
 
 
 def unpack_tfdata(val_dataset, max_events=10000, logger=None):
@@ -292,38 +335,45 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
             "mass": truth_tautau_array[:, 3],
         })
 
+        nu1_start = 1
+        nu2_start = 4
         truth_nu1 = vector.arr({
-            "pt": np.expm1(truth_nu[:, 2]),
-            "eta": truth_nu[:, 3],
-            "phi": truth_nu[:, 4],
-            "mass": np.zeros_like(truth_nu[:, 2]),
+            "pt": np.expm1(truth_nu[:, nu1_start]),
+            "eta": truth_nu[:, nu1_start + 1],
+            "phi": truth_nu[:, nu1_start + 2],
+            "mass": np.zeros_like(truth_nu[:, nu1_start]),
         })
         truth_nu2 = vector.arr({
-            "pt": np.expm1(truth_nu[:, 5]),
-            "eta": truth_nu[:, 6],
-            "phi": truth_nu[:, 7],
+            "pt": np.expm1(truth_nu[:, nu2_start]),
+            "eta": truth_nu[:, nu2_start + 1],
+            "phi": truth_nu[:, nu2_start + 2],
             "mass": np.zeros_like(truth_nu[:, 2]),
         })
 
         nu1 = vector.arr({
-            "pt": np.expm1(pred_nu[:, 2]),
-            "eta": pred_nu[:, 3],
-            "phi": pred_nu[:, 4],
+            "pt": np.expm1(pred_nu[:, nu1_start]),
+            "eta": pred_nu[:, nu1_start + 1],
+            "phi": pred_nu[:, nu1_start + 2],
             "mass": np.zeros_like(pred_nu[:, 2]),
         })
         nu2 = vector.arr({
-            "pt": np.expm1(pred_nu[:, 5]),
-            "eta": pred_nu[:, 6],
-            "phi": pred_nu[:, 7],
+            "pt": np.expm1(pred_nu[:, nu2_start]),
+            "eta": pred_nu[:, nu2_start + 1],
+            "phi": pred_nu[:, nu2_start + 2],
             "mass": np.zeros_like(pred_nu[:, 2]),
         })
 
-        dR_nu_tau_1 = pred_nu[:, 0]
-        dR_nu_tau_2 = pred_nu[:, 1]
+        # dR_nu_tau_1 = pred_nu[:, 0]
+        # dR_nu_tau_2 = pred_nu[:, 1]
         # truth_dR_nu_tau_1 = tau1.deltaR(truth_nu1)
         # truth_dR_nu_tau_2 = tau2.deltaR(truth_nu2)
-        truth_dR_nu_tau_1 = truth_nu[:, 0]
-        truth_dR_nu_tau_2 = truth_nu[:, 1]
+        # truth_dR_nu_tau_1 = truth_nu[:, 0]
+        # truth_dR_nu_tau_2 = truth_nu[:, 1]
+        mass_pred = pred_nu[:, 0]
+        mass_truth = truth_nu[:, 0]
+
+        mass_raw_pred = self.val_dataloader.mass_transform.inverse_transform(mass_pred.reshape(-1, 1))
+        mass_raw_truth = self.val_dataloader.mass_transform.inverse_transform(mass_truth.reshape(-1, 1))
 
         tau1_full = tau1 + nu1
         tau2_full = tau2 + nu2
@@ -360,10 +410,14 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
                 )
 
                 log_dR_distribution(
-                    dR_pred_1=dR_nu_tau_1,
-                    dR_pred_2=dR_nu_tau_2,
-                    dR_truth_1=truth_dR_nu_tau_1,
-                    dR_truth_2=truth_dR_nu_tau_2,
+                    # dR_pred_1=dR_nu_tau_1,
+                    # dR_pred_2=dR_nu_tau_2,
+                    # dR_truth_1=truth_dR_nu_tau_1,
+                    # dR_truth_2=truth_dR_nu_tau_2,
+                    dR_pred_1=mass_pred,
+                    dR_pred_2=mass_raw_pred,
+                    dR_truth_1=mass_truth,
+                    dR_truth_2=mass_raw_truth,
                     epoch=epoch,
                     logger=self.logger,
                     weights=weight,

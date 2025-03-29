@@ -10,6 +10,8 @@ from functools import partial
 from evaluation.stack import plot_hist, plot_reco_truth_histogram
 from evaluation.correlation import plot_linearity
 
+def inverse_signed_log1p(y):
+    return np.sign(y) * (np.expm1(np.abs(y)))
 
 def get_neutrino_candidates(reco_nu, method='random'):
     if method == 'random':
@@ -23,7 +25,7 @@ def get_neutrino_candidates(reco_nu, method='random'):
 
 def pre_selection(data: dict[str, vector.MomentumNumpy4D | list], select: bool = True) -> dict:
     sel = (data['truth_TauTau'].E > 0)
-    sel &= (data['truth_TauTau'].mass < 250) & (data['truth_TauTau'].mass > 0)
+    sel &= (data['truth_TauTau'].mass < 260) & (data['truth_TauTau'].mass > 60)
     sel &= (data['truth_nu1'].pt > 0)
     sel &= (data['truth_nu2'].pt > 0)
 
@@ -103,10 +105,11 @@ def read_data(raw_files: list[Path], ml_files: list[Path]):
 
         data['reco_nu1'] = ml_data['nu1'][final_indices]
         data['reco_nu2'] = ml_data['nu2'][final_indices]
+        # data['diff'] = ml_data['diff'][final_indices]
 
     for key in data:
         data[key] = np.concatenate(data[key], axis=0)
-        if key in ['reco_nu1', 'reco_nu2'] and data[key].ndim == 2:
+        if key in ['reco_nu1', 'reco_nu2', 'diff'] and data[key].ndim == 2:
             data[key] = np.expand_dims(data[key], axis=1)  # Back to (n, 1, 3)
 
     return data
@@ -122,9 +125,7 @@ def process_data(
         if key_columns is not None and key in key_columns:
 
             array_data = data[key]
-            if 'reco_nu' in key:
-                # data[key] = data[key.replace('reco_nu', 'truth_nu')]
-
+            if 'reco_nu1' in key:
                 # IMPORTANT
                 # pt and E is np.log1p(pt), need to revert
                 array_data = get_neutrino(data[key])
@@ -132,8 +133,25 @@ def process_data(
                     'pt': np.expm1(array_data[:, 0]),
                     'eta': array_data[:, 1],
                     'phi': array_data[:, 2],
-                    'mass': np.zeros(array_data.shape[0]),
-                    # 'energy': np.expm1(array_data[:, 3]),
+                    # 'mass': np.zeros(array_data.shape[0]),
+                    'energy': np.expm1(array_data[:, 3]),
+                }).to_pxpypzenergy()
+            if 'reco_nu2'  in key:
+                array_data = get_neutrino(data[key])
+                data[key] = vector.arr({
+                    "pt": data['reco_nu1'].pt - inverse_signed_log1p(array_data[:, 0]),
+                    "eta": data['reco_nu1'].eta - array_data[:, 1],
+                    "phi": data['reco_nu1'].phi - array_data[:, 2],
+                    "energy": data['reco_nu1'].energy - inverse_signed_log1p(array_data[:, 3]),
+                })
+            elif 'diff' in key:
+                array_data = get_neutrino(data[key])
+                data[key] = vector.array({
+                    'px': inverse_signed_log1p(array_data[:, 0]),
+                    'py':inverse_signed_log1p(array_data[:, 1]),
+                    'pz': inverse_signed_log1p(array_data[:, 2]),
+                    # 'mass': np.zeros(array_data.shape[0]),
+                    'energy': inverse_signed_log1p(array_data[:, 3]),
                 }).to_pxpypzenergy()
             else:
                 data[key] = vector.array({
@@ -148,6 +166,7 @@ def process_data(
     data['reco_Tau2'] = data['Tau2'] + data['reco_nu2']
 
     data['reco_TauTau'] = data['reco_Tau1'] + data['reco_Tau2']
+    # data['reco_TauTau'] = data['Tau1']  + data['Tau2'] + data['diff']
     data['reco_HH'] = data['reco_TauTau'] + data['Jet_b1'] + data['Jet_b2']
     data['HH_mmc'] = data['mmc'] + data['Jet_b1'] + data['Jet_b2']
     data['truth_HH'] = data['truth_TauTau'] + data['truth_bb']
@@ -182,8 +201,8 @@ def read_variable(files: dict, var: str, weight: str = 'weight'):
 
 if __name__ == '__main__':
 
-    tag = 'Output.nersc.gamma_only/data.1'
-    # tag = 'Output'
+    # tag = 'Output.Ztt_only'
+    tag = 'Output.delta'
     # base_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_eval')
     # out_dir = Path('/global/cfs/cdirs/m2616/avencast/bbtautau/tautau_reconstruction/out_20250219_plots')
     base_dir = Path('/Users/avencastmini/PycharmProjects/OmniLearn/workspace/')
@@ -192,31 +211,31 @@ if __name__ == '__main__':
 
     files = {
         'hhttbbSM': {
-            'raw': ['data/RawData/hhttbbSM_eval.pkl'],
+            'raw': ['data/RawData.new/hhttbbSM_eval.pkl'],
             'ml': [f'{tag}/hhttbbSM.npz'],
             'signal': True,
             'color': '#cc7c71',
         },
         'ytautau': {
-            'raw': ['data/RawData/ytautau_eval.pkl'],
+            'raw': ['data/RawData.new/ytautau_eval.pkl'],
             'ml': [f'{tag}/ytautau.npz'],
             'signal': False,
             'color': '#7ab656',
         },
         'Ztt': {
-            'raw': ['data/RawData/Ztt_eval.pkl'],
+            'raw': ['data/RawData.new/Ztt_eval.pkl'],
             'ml': [f'{tag}/Ztt.npz'],
             'signal': False,
             'color': '#925eb0',
         },
         'ttbar_dilep': {
-            'raw': ['data/RawData/ttbar_dilep_eval.pkl'],
+            'raw': ['data/RawData.new/ttbar_dilep_eval.pkl'],
             'ml': [f'{tag}/ttbar_dilep.npz'],
             'signal': False,
             'color': '#7399f4',
         },
         'VBFhhttbbSM': {
-            'raw': ['data/RawData/VBFhhttbbSM_eval.pkl'],
+            'raw': ['data/RawData.new/VBFhhttbbSM_eval.pkl'],
             'ml': [f'{tag}/VBFhhttbbSM.npz'],
             'signal': True,
             'color': '#a5aeb7',
@@ -231,6 +250,7 @@ if __name__ == '__main__':
         'Jet_b1', 'Jet_b2',
         'truth_bb',
         'mmc',
+        'diff',
     ]
 
     delta_columns = [
@@ -276,37 +296,37 @@ if __name__ == '__main__':
             x_title = var_title.replace('M', kin_title)
 
             x_range = None
-            plot_sig_percentile = (0.025, 0.975)
+            plot_sig_percentile = (0.005, 0.995)
             if kin == "mass" and var == "TauTau":
-                x_range = (40, 250)
+                x_range = (60, 260)
                 plot_sig_percentile = None
 
-            # plot_hist(
-            #     data=nominal,
-            #     column_to_plot=kin,
-            #     weight_col='weight',
-            #     bins=100,
-            #     x_range=x_range,
-            #     plot_sig_percentile=plot_sig_percentile,
-            #     # plot_sig_percentile=None,
-            #     fig_size=(10, 8),
-            #     x_title=x_title,
-            #     save_path=out_dir / f'{var}_{kin}.png',
-            #     compare=mmc if var == "TauTau" else None
-            # )
-            #
-            # plot_hist(
-            #     data=truth,
-            #     column_to_plot=kin,
-            #     weight_col='weight',
-            #     bins=100,
-            #     x_range=x_range,
-            #     plot_sig_percentile=plot_sig_percentile,
-            #     # plot_sig_percentile=None,
-            #     fig_size=(10, 8),
-            #     x_title=x_title,
-            #     save_path=out_dir / f'{var}_{kin}_truth.png'
-            # )
+            plot_hist(
+                data=nominal,
+                column_to_plot=kin,
+                weight_col='weight',
+                bins=100,
+                x_range=x_range,
+                plot_sig_percentile=plot_sig_percentile,
+                # plot_sig_percentile=None,
+                fig_size=(10, 8),
+                x_title=x_title,
+                save_path=out_dir / f'{var}_{kin}.png',
+                compare=mmc if var == "TauTau" else None
+            )
+
+            plot_hist(
+                data=truth,
+                column_to_plot=kin,
+                weight_col='weight',
+                bins=100,
+                x_range=x_range,
+                plot_sig_percentile=plot_sig_percentile,
+                # plot_sig_percentile=None,
+                fig_size=(10, 8),
+                x_title=x_title,
+                save_path=out_dir / f'{var}_{kin}_truth.png'
+            )
             #
             # plot_hist(
             #     data=delta_nominal,

@@ -6,6 +6,8 @@ import numpy as np
 import os
 import vector
 
+from scipy.ndimage import gaussian_filter
+
 
 def is_valid_event(input_dict: dict, boost_col: list, boost_max_eta: float = 5.0, boost_min_pt: float = 0.0):
     """
@@ -26,7 +28,7 @@ def is_valid_event(input_dict: dict, boost_col: list, boost_max_eta: float = 5.0
 
 
 def pre_selection(data: dict[str, vector.MomentumNumpy4D | list], select: bool = True, with_bb: bool = False) -> dict:
-    sel = (data['truth_TauTau'].E > 0)
+    sel = (data['truth_TauTau'].E > 0) & (data['truth_TauTau'].pt > 20)
     sel &= (data['truth_TauTau'].mass < 260) & (data['truth_TauTau'].mass > 60)
     # sel &= (data['truth_TauTau'].pt > 0) & (data['truth_TauTau'].eta > -10) & (data['truth_TauTau'].phi > -50)
     sel &= (data['truth_nu1'].E > 0)
@@ -204,6 +206,51 @@ def reweight_flat_distribution(mass: np.ndarray, bins: int = 100, range_min: flo
     return weights
 
 
+def reweight_3d_joint(
+        pt, eta, mass,
+        pt_bins=None, eta_bins=None, mass_bins=None,
+        sigma=1.0,
+        clip_max=300.0
+):
+    # Default binning if not provided
+    if pt_bins is None:
+        pt_bins = np.concatenate([np.linspace(0, 500, 100), [np.max(pt) + 1]])
+    if eta_bins is None:
+        eta_bins = np.concatenate([np.linspace(0, 3, 60), [np.max(np.abs(eta)) + 0.1]])
+    if mass_bins is None:
+        mass_bins = np.linspace(60, 260, 50)
+
+    # Compute histogram
+    hist, edges = np.histogramdd(
+        sample=np.stack([pt, np.abs(eta), mass], axis=1),
+        bins=[pt_bins, eta_bins, mass_bins]
+        # sample=np.stack([pt, np.abs(eta)], axis=1),
+        # bins=[pt_bins, eta_bins]
+    )
+
+    # Smooth and normalize histogram
+    hist_smooth = gaussian_filter(hist, sigma=sigma)
+    hist_smooth = np.where(hist_smooth <= 1, 1, hist_smooth)
+    weights_per_bin = 1.0 / hist_smooth
+    weights_per_bin *= np.sum(hist_smooth) / np.sum(weights_per_bin)
+
+    # Bin indices
+    pt_idx = np.clip(np.digitize(pt, pt_bins) - 1, 0, len(pt_bins) - 2)
+    eta_idx = np.clip(np.digitize(np.abs(eta), eta_bins) - 1, 0, len(eta_bins) - 2)
+    mass_idx = np.clip(np.digitize(mass, mass_bins) - 1, 0, len(mass_bins) - 2)
+
+    # Assign weights
+    weights = weights_per_bin[pt_idx, eta_idx, mass_idx]
+    # weights = weights_per_bin[pt_idx, eta_idx]
+    weights = np.clip(weights, a_min=0, a_max=clip_max)
+    # reweight to total entries
+    total_entries = np.sum(weights)
+    if total_entries > 0:
+        weights *= len(weights) / total_entries
+
+    return weights
+
+
 def main(args):
     pass
 
@@ -262,9 +309,10 @@ if __name__ == '__main__':
         'ytautau': {
             'f': [f'ytautau_{i}.pkl' for i in range(3)],
             'boost': True,
-            'boost_round': 20,
+            'boost_round': 50,
             'with_bb': False,
             'reweight': True,
+            # 'special_boost_round': 50,
         },
         # 'Ztt': {
         #     'f': [f'Ztt_jets_{i}.pkl' for i in range(10)],
@@ -287,10 +335,10 @@ if __name__ == '__main__':
     }
 
     # !!! for eval !!!
-    files = {f'{sample}_eval': value for sample, value in files.items()}
-    for samples in files.keys():
-        files[samples]['boost'] = False
-        files[samples]['boost_round'] = 1
+    # files = {f'{sample}_eval': value for sample, value in files.items()}
+    # for samples in files.keys():
+    #     files[samples]['boost'] = False
+    #     files[samples]['boost_round'] = 1
 
     for samples in files.keys():
         files[samples]['f'] = [base_dir / f for f in files[samples]['f']]
@@ -302,6 +350,8 @@ if __name__ == '__main__':
 
         boost_round = files[sample]['boost_round']
         if_boost = files[sample]['boost']
+
+        special_boost_round = files[sample].get('special_boost_round', 0)
 
         save_data = None
         for f in files[sample]['f']:
@@ -326,9 +376,15 @@ if __name__ == '__main__':
 
         print(f"\n {sample}: Final data length: {len(save_data[list(save_data)[0]])}")
 
-        if files[sample].get('reweight', False): # and files[sample]['boost']:
-            save_data['weight_mc'] = reweight_flat_distribution(
-                mass=save_data['truth_TauTau'][:, 3], bins=200, range_min=60, range_max=260
+        if files[sample].get('reweight', False):  # and files[sample]['boost']:
+            # save_data['weight_mc'] = reweight_flat_distribution(
+            #     mass=save_data['truth_TauTau'][:, 3], bins=200, range_min=60, range_max=260
+            # )
+
+            save_data['weight_mc'] = reweight_3d_joint(
+                mass=save_data['truth_TauTau'][:, 3],
+                pt=save_data['truth_TauTau'][:, 0],
+                eta=save_data['truth_TauTau'][:, 1]
             )
 
         # Save the final merged data

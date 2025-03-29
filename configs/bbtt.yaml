@@ -7,8 +7,9 @@ preprocess:
     raw_folder: "./RawData"
     processed_folder: &processed_folder "./NumpyData"
     sample_list:
-      - "hhttbbSM_eval.pkl"
-      - "ytautau_eval.pkl"
+#      - "hhttbbSM_eval.pkl"
+#      - "ytautau_eval.pkl"
+      - "Ztt_eval.pkl"
   evaluation:
     for_training: false
     overwrite: true
@@ -22,7 +23,7 @@ preprocess:
 sample:
   base_folder: *processed_folder
   tag: "bbtt"
-  n_events: 100
+  n_events: -1
 
   normalization:
     particle:
@@ -107,7 +108,7 @@ model:
   #Use local embedding
   local: true
   # number of  the neighbors
-  K: 2
+  K: 1
   # number of  the local features
   num_local: 2
   # number of  the PET layers

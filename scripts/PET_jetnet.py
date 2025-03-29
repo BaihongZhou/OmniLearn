@@ -200,14 +200,14 @@ class PET_jetnet(keras.Model):
         dyn_mask = tf.zeros((batch_size, 4), dtype=tf.float32)
         target_mask = tf.zeros((batch_size, 7), dtype=tf.float32)
 
-        # Stage Z
+        # Stage Z (only Z)
         target_mask += tf.where(
             tf.equal(stages[:, None], 0),
             tf.concat([tf.ones((batch_size, 1)), tf.zeros((batch_size, 6))], axis=1),
             tf.zeros_like(target_mask)
         )
 
-        # Stage v1
+        # Stage v1 (refine Z + v1)
         dyn_mask += tf.where(
             tf.equal(stages[:, None], 1),
             tf.concat([tf.ones((batch_size, 1)), tf.zeros((batch_size, 3))], axis=1),
@@ -215,25 +215,24 @@ class PET_jetnet(keras.Model):
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 1),
-            tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 3)), tf.zeros((batch_size, 3))], axis=1),
+            tf.concat([tf.ones((batch_size, 4)), tf.zeros((batch_size, 3))], axis=1),  # Z + v1
             tf.zeros_like(target_mask)
         )
 
-        # Stage v2
+        # Stage v2 (refine Z + v1 + v2)
         dyn_mask += tf.where(
             tf.equal(stages[:, None], 2),
             tf.ones((batch_size, 4)), tf.zeros_like(dyn_mask)
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 2),
-            tf.concat([tf.zeros((batch_size, 4)), tf.ones((batch_size, 3))], axis=1),
+            tf.ones((batch_size, 7)),  # full [Z, v1, v2]
             tf.zeros_like(target_mask)
         )
 
-        # Merge back full condition mask
         cond_mask = tf.concat([
-            tf.ones((batch_size, eff_cond), dtype=tf.float32),  # static part
-            dyn_mask  # dynamic [z1, z2, v1]
+            tf.ones((batch_size, eff_cond), dtype=tf.float32),  # static
+            dyn_mask  # Z + v1 dynamic
         ], axis=1)
 
         return cond_mask, target_mask
@@ -289,8 +288,8 @@ class PET_jetnet(keras.Model):
         # 🔹 Stage-dependent noise config
         stage_sigma_config = {
             0: (-1.8, 0.6),  # Z stage
-            1: (-1.2, 1.0),  # v1 stage
-            2: (-0.8, 1.3),  # v2 stage
+            1: (-1.2, 1.2),  # v1 stage
+            2: (-1.4, 1.0),  # v2 stage
         }
 
         stage_p_mean = tf.gather([v[0] for v in stage_sigma_config.values()], stages)
@@ -384,8 +383,8 @@ class PET_jetnet(keras.Model):
         # 🔹 Stage-dependent noise config
         stage_sigma_config = {
             0: (-1.8, 0.6),  # Z stage
-            1: (-1.2, 1.0),  # v1 stage
-            2: (-0.8, 1.3),  # v2 stage
+            1: (-1.2, 1.2),  # v1 stage
+            2: (-1.4, 1.0),  # v2 stage
         }
 
         stage_p_mean = tf.gather([v[0] for v in stage_sigma_config.values()], stages)
@@ -501,10 +500,10 @@ class PET_jetnet(keras.Model):
                     if stage > 0:
                         jet = jet * data_loader_target_std + data_loader_target_mean
 
-                    jets_stage[:, n, start:end] = jet[:, start:end]
-
                     if self.eff_cond + end < cond.shape[-1]:
                         cond[:, self.eff_cond + start:self.eff_cond + end] = jet[:, start:end]
+                    else:
+                        jets_stage[:, n, :] = jet
 
                 if use_tqdm_inside:
                     stage_bar.close()

@@ -262,7 +262,7 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         # 🔹 Sample stage for each event
-        probs = tf.constant([0.4, 0.3, 0.3])  # Z:40%, v1:30%, v2:30%
+        probs = tf.constant([0.3, 0.4, 0.3])  # Z:40%, v1:30%, v2:30%
         stages = tf.random.categorical(tf.math.log([probs]), batch_size)[0]
 
         # 🔹 Mask for each stage
@@ -283,41 +283,23 @@ class PET_jetnet(keras.Model):
 
         cond_mask = tf.cast(cond_mask, dtype=y.dtype)
         y = y * cond_mask
-        x_clean = x['input_jet']
-
-        # 🔹 Stage-dependent noise config
-        stage_sigma_config = {
-            0: (-1.8, 0.6),  # Z stage
-            1: (-1.2, 1.2),  # v1 stage
-            2: (-1.4, 1.0),  # v2 stage
-        }
-
-        stage_p_mean = tf.gather([v[0] for v in stage_sigma_config.values()], stages)
-        stage_p_std = tf.gather([v[1] for v in stage_sigma_config.values()], stages)
-
-        sigma_data = self.sigma_data
 
         with tf.GradientTape(persistent=True) as tape:
-            rnd_normal = tf.random.normal((batch_size,), dtype=tf.float32)
-            sigma = tf.exp(rnd_normal * stage_p_std + stage_p_mean)
-            sigma = tf.cast(tf.reshape(sigma, (-1, 1)), tf.float32)
-            loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
+            t = tf.random.uniform((batch_size, 1))
+            logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
 
             eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-            x_noisy = x_clean + sigma * eps
+            perturbed_x = alpha * x['input_jet'] + eps * sigma
 
-            pred = self.edm_preconditioned_network(
-                self.model_part,
-                x_noisy,
-                sigma,
+            v_pred = self.model_part([
                 x['input_features'],
                 x['input_points'],
                 x['input_mask'],
-                y
-            )
+                perturbed_x, t, y
+            ])
 
-            target = x_clean
-            per_event_loss = loss_weight * tf.square(pred - target) * target_mask
+            v_jet = alpha * eps - sigma * x['input_jet']
+            per_event_loss = tf.square(v_pred - v_jet) * target_mask
 
             # 🔹 Get per-stage masked losses
             loss_z = tf.reduce_mean(per_event_loss * z_mask)
@@ -378,38 +360,22 @@ class PET_jetnet(keras.Model):
 
         cond_mask = tf.cast(cond_mask, dtype=y.dtype)
         y = y * cond_mask
-        x_clean = x['input_jet']
 
-        # 🔹 Stage-dependent noise config
-        stage_sigma_config = {
-            0: (-1.8, 0.6),  # Z stage
-            1: (-1.2, 1.2),  # v1 stage
-            2: (-1.4, 1.0),  # v2 stage
-        }
-
-        stage_p_mean = tf.gather([v[0] for v in stage_sigma_config.values()], stages)
-        stage_p_std = tf.gather([v[1] for v in stage_sigma_config.values()], stages)
-        sigma_data = self.sigma_data
-
-        rnd_normal = tf.random.normal((batch_size,), dtype=tf.float32)
-        sigma = tf.exp(rnd_normal * stage_p_std + stage_p_mean)
-        sigma = tf.cast(tf.reshape(sigma, (-1, 1)), tf.float32)
-        loss_weight = (sigma ** 2 + sigma_data ** 2) / (sigma * sigma_data) ** 2
+        t = tf.random.uniform((batch_size, 1))
+        logsnr, alpha, sigma = self.get_logsnr_alpha_sigma(t)
 
         eps = tf.random.normal((batch_size, self.num_jet), dtype=tf.float32)
-        x_noisy = x_clean + sigma * eps
+        perturbed_x = alpha * x['input_jet'] + eps * sigma
 
-        pred = self.edm_preconditioned_network(
-            self.model_part,
-            x_noisy,
-            sigma,
+        v_pred = self.model_part([
             x['input_features'],
             x['input_points'],
             x['input_mask'],
-            y
-        )
-        target = x_clean
-        per_event_loss = loss_weight * tf.square(pred - target) * target_mask
+            perturbed_x, t, y
+        ])
+
+        v_jet = alpha * eps - sigma * x['input_jet']
+        per_event_loss = tf.square(v_pred - v_jet) * target_mask
 
         # 🔹 Get per-stage masked losses
         loss_z = tf.reduce_mean(per_event_loss * z_mask)
@@ -482,21 +448,13 @@ class PET_jetnet(keras.Model):
                     # num_steps_stage = self.num_steps * (stage + 1)
                     num_steps_stage = self.num_steps
 
-                    jet = self.edm_sampler(
-                        part=part,
-                        point=point,
-                        mask=mask,
-                        cond=cond,
-                        model_part=self.model_part,
-                        data_shape=(part.shape[0], self.num_jet),
-                        num_steps=num_steps_stage,
-                        sigma_min=self.sigma_min,
-                        sigma_max=self.sigma_max,
-                        rho=self.rho,
-                        S_churn=self.S_churn,
-                        S_min=self.S_min,
-                        S_max=float('inf'),
-                        S_noise=self.S_noise,
+                    jet = self.DDIMSampler(
+                        part, point, mask, cond,
+                        [self.ema_body, self.ema_head],
+                        data_shape=[part.shape[0], self.num_jet],
+                        w=0.0,
+                        num_steps=self.num_steps,
+                        const_shape=[-1, 1]
                     ).numpy()
 
                     if stage > 0:
@@ -527,8 +485,8 @@ class PET_jetnet(keras.Model):
         a = tf.math.atan(tf.exp(-0.5 * logsnr_min)) - b
         return tf.math.atan(tf.exp(-0.5 * tf.cast(logsnr, tf.float32))) / a - b / a
 
-    def get_logsnr_alpha_sigma(self, sigma, shape=None):
-        logsnr = -tf.math.log(tf.square(sigma))
+    def get_logsnr_alpha_sigma(self, time, shape=None):
+        logsnr = self.logsnr_schedule_cosine(time)
         alpha = tf.sqrt(tf.math.sigmoid(logsnr))
         sigma = tf.sqrt(tf.math.sigmoid(-logsnr))
 

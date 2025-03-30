@@ -136,4 +136,4 @@ model:
   fine_tune: false
   use_mean: false
   lambda_adv: 0.5
-  num_steps: 20
+  num_steps: 100

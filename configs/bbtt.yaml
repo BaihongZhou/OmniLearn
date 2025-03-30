@@ -8,8 +8,8 @@ preprocess:
     processed_folder: &processed_folder "./NumpyData"
     sample_list:
 #      - "hhttbbSM_eval.pkl"
-#      - "ytautau_eval.pkl"
-      - "Ztt_eval.pkl"
+      - "ytautau_eval.pkl"
+#      - "Ztt_eval.pkl"
   evaluation:
     for_training: false
     overwrite: true
@@ -23,7 +23,7 @@ preprocess:
 sample:
   base_folder: *processed_folder
   tag: "bbtt"
-  n_events: -1
+  n_events: 1000
 
   normalization:
     particle:
@@ -42,7 +42,7 @@ evaluation:
 
 features:
   nu:
-    kinematic: [ "pt", "eta", "phi", "energy" ]
+    kinematic: [ "pt", "eta", "phi"]
     particles:
       - truth_nu1
       - truth_nu2
@@ -136,4 +136,4 @@ model:
   fine_tune: false
   use_mean: false
   lambda_adv: 0.5
-  num_steps: 50
+  num_steps: 20

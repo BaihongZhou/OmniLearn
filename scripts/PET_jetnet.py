@@ -215,7 +215,7 @@ class PET_jetnet(keras.Model):
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 1),
-            tf.concat([tf.ones((batch_size, 4)), tf.zeros((batch_size, 3))], axis=1),  # Z + v1
+            tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 3)), tf.zeros((batch_size, 3))], axis=1),  # v1
             tf.zeros_like(target_mask)
         )
 
@@ -226,7 +226,7 @@ class PET_jetnet(keras.Model):
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 2),
-            tf.ones((batch_size, 7)),  # full [Z, v1, v2]
+            tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 6))], axis=1),  # full [Z, v1, v2]
             tf.zeros_like(target_mask)
         )
 
@@ -285,7 +285,7 @@ class PET_jetnet(keras.Model):
         # Add noise to last 5 dimensions of y
         noise = tf.concat([
             tf.zeros_like(y[:, :-4]),
-            tf.random.normal(tf.shape(y[:, -4:]), stddev=0.2, dtype=y.dtype)
+            tf.random.normal(tf.shape(y[:, -4:]), stddev=0.1, dtype=y.dtype)
         ], axis=1)
         y += noise
         y = y * cond_mask
@@ -347,7 +347,7 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         # 🔹 Sample stage for each event
-        probs = tf.constant([0.4, 0.3, 0.3])  # Z:40%, v1:30%, v2:30%
+        probs = tf.constant([0.4, 0.4, 0.2])  # Z:40%, v1:30%, v2:30%
         stages = tf.random.categorical(tf.math.log([probs]), batch_size)[0]
 
         # 🔹 Mask for each stage

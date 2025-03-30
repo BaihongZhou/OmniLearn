@@ -172,15 +172,12 @@ def log_vector_distribution(
                 logger.info(f"[EvalCallback] --> Saved {name} {k}{suffix} distribution plot")
 
 
-def log_dR_distribution(dR_pred_1, dR_pred_2, dR_truth_1, dR_truth_2, epoch, logger=None, weights=None):
+def log_dR_distribution(dR_preds, dR_truths, epoch, logger=None, weights=None):
     if hvd.rank() == 0:
         import wandb
 
     results = {}
-    for i, (dR_pred, dR_truth) in enumerate([
-        (dR_pred_1, dR_truth_1),
-        (dR_pred_2, dR_truth_2)
-    ]):
+    for i, (dR_pred, dR_truth) in enumerate(zip(dR_preds, dR_truths)):
         if dR_pred is None:
             continue
 
@@ -420,10 +417,8 @@ class DiffusionValidationCallback(tf.keras.callbacks.Callback):
                     # dR_pred_2=dR_nu_tau_2,
                     # dR_truth_1=truth_dR_nu_tau_1,
                     # dR_truth_2=truth_dR_nu_tau_2,
-                    dR_pred_1=mass_pred,
-                    dR_pred_2=mass_raw_pred,
-                    dR_truth_1=mass_truth,
-                    dR_truth_2=mass_raw_truth,
+                    dR_preds=[mass_pred, mass_raw_pred, pred_nu[:, nu1_start]],
+                    dR_truths=[mass_truth, mass_raw_truth, truth_nu[:, nu1_start]],
                     epoch=epoch,
                     logger=self.logger,
                     weights=weight,

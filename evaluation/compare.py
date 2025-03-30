@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import numpy as np
 import pickle
+
+from scipy.stats import norm
 from tqdm import tqdm
 import vector
 from functools import partial
@@ -13,6 +15,11 @@ from evaluation.correlation import plot_linearity
 
 def inverse_signed_log1p(y):
     return np.sign(y) * (np.expm1(np.abs(y)))
+
+def inverse_gauss_to_phi(phi_gauss):
+    phi_uniform_back = norm.cdf(phi_gauss)
+    phi_recovered = phi_uniform_back * 2 * np.pi - np.pi
+    return phi_recovered
 
 
 def get_neutrino_candidates(reco_nu, method='random'):
@@ -135,7 +142,7 @@ def process_data(
                 data[key] = vector.array({
                     'pt': np.expm1(array_data[:, 0]),
                     'eta': array_data[:, 1],
-                    'phi': array_data[:, 2],
+                    'phi': inverse_gauss_to_phi(array_data[:, 2]),
                     'mass': np.zeros(array_data.shape[0]),
                     # 'energy': np.expm1(array_data[:, 3]),
                 }).to_pxpypzenergy()

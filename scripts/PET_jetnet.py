@@ -282,6 +282,12 @@ class PET_jetnet(keras.Model):
         # tf.print("target_mask[0]:", target_mask[0])
 
         cond_mask = tf.cast(cond_mask, dtype=y.dtype)
+        # Add noise to last 5 dimensions of y
+        noise = tf.concat([
+            tf.zeros_like(y[:, :-4]),
+            tf.random.normal(tf.shape(y[:, -4:]), stddev=0.2, dtype=y.dtype)
+        ], axis=1)
+        y += noise
         y = y * cond_mask
 
         with tf.GradientTape(persistent=True) as tape:
@@ -460,13 +466,14 @@ class PET_jetnet(keras.Model):
                     if stage > 0:
                         jet = jet * data_loader_target_std + data_loader_target_mean
 
-                    if stage == 0:
-                        z_stage = jet[:, start:end]
+                    # if stage == 0:
+                    #     z_stage = jet[:, start:end]
+                    # jets_stage[:, n, start:end] = jet[:, start:end]
                     if self.eff_cond + end < cond.shape[-1]:
                         cond[:, self.eff_cond + start:self.eff_cond + end] = jet[:, start:end]
                     else:
                         jets_stage[:, n, :] = jet
-                        jets_stage[:, n, 0:1] = z_stage
+                    #     jets_stage[:, n, 0:1] = z_stage
 
                 if use_tqdm_inside:
                     stage_bar.close()

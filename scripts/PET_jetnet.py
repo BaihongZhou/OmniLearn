@@ -222,12 +222,15 @@ class PET_jetnet(keras.Model):
         # Stage v2 (refine Z + v1 + v2)
         dyn_mask += tf.where(
             tf.equal(stages[:, None], 2),
-            tf.ones((batch_size, 4)), tf.zeros_like(dyn_mask)
+            # tf.ones((batch_size, 4)),
+            tf.zeros_like(dyn_mask),
+            tf.zeros_like(dyn_mask),
         )
         target_mask += tf.where(
             tf.equal(stages[:, None], 2),
-            tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 6))], axis=1),  # full [Z, v1, v2]
-            tf.zeros_like(target_mask)
+            # tf.concat([tf.zeros((batch_size, 1)), tf.ones((batch_size, 6))], axis=1),  # full [Z, v1, v2]
+            tf.ones_like(target_mask),
+            tf.zeros_like(target_mask),
         )
 
         cond_mask = tf.concat([
@@ -262,7 +265,8 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         # 🔹 Sample stage for each event
-        probs = tf.constant([0.3, 0.4, 0.3])  # Z:40%, v1:30%, v2:30%
+        # probs = tf.constant([0.3, 0.4, 0.3])  # Z:40%, v1:30%, v2:30%
+        probs = tf.constant([0.0, 0.0, 1.0])  # Z:40%, v1:30%, v2:30%
         stages = tf.random.categorical(tf.math.log([probs]), batch_size)[0]
 
         # 🔹 Mask for each stage
@@ -347,7 +351,8 @@ class PET_jetnet(keras.Model):
         weight = x['input_weight']
 
         # 🔹 Sample stage for each event
-        probs = tf.constant([0.4, 0.4, 0.2])  # Z:40%, v1:30%, v2:30%
+        # probs = tf.constant([0.3, 0.4, 0.3])  # Z:40%, v1:30%, v2:30%
+        probs = tf.constant([0.0, 0.0, 1.0])  # Z:40%, v1:30%, v2:30%
         stages = tf.random.categorical(tf.math.log([probs]), batch_size)[0]
 
         # 🔹 Mask for each stage
@@ -454,6 +459,8 @@ class PET_jetnet(keras.Model):
                     # num_steps_stage = self.num_steps * (stage + 1)
                     num_steps_stage = self.num_steps
 
+                    if stage != 2: continue
+
                     jet = self.DDIMSampler(
                         part, point, mask, cond,
                         [self.ema_body, self.ema_head],
@@ -466,14 +473,14 @@ class PET_jetnet(keras.Model):
                     if stage > 0:
                         jet = jet * data_loader_target_std + data_loader_target_mean
 
-                    if stage == 0:
-                        z_stage = jet[:, start:end]
+                    # if stage == 0:
+                    #     z_stage = jet[:, start:end]
                     # jets_stage[:, n, start:end] = jet[:, start:end]
                     if self.eff_cond + end < cond.shape[-1]:
                         cond[:, self.eff_cond + start:self.eff_cond + end] = jet[:, start:end]
                     else:
                         jets_stage[:, n, :] = jet
-                        jets_stage[:, n, 0:1] = z_stage
+                        # jets_stage[:, n, 0:1] = z_stage
 
                 if use_tqdm_inside:
                     stage_bar.close()

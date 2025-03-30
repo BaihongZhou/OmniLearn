@@ -469,6 +469,8 @@ class PET_jetnet(keras.Model):
                 cond = cond_init.copy()
                 cond[:, self.eff_cond:] = 0.0
 
+                z_stage = None
+
                 stage_bar = tqdm(
                     enumerate([(0, 1), (1, 4), (4, 7)]),
                     total=3,
@@ -500,10 +502,13 @@ class PET_jetnet(keras.Model):
                     if stage > 0:
                         jet = jet * data_loader_target_std + data_loader_target_mean
 
+                    if stage == 0:
+                        z_stage = jet[:, start:end]
                     if self.eff_cond + end < cond.shape[-1]:
                         cond[:, self.eff_cond + start:self.eff_cond + end] = jet[:, start:end]
                     else:
                         jets_stage[:, n, :] = jet
+                        jets_stage[:, n, 0:1] = z_stage
 
                 if use_tqdm_inside:
                     stage_bar.close()

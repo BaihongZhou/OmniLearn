@@ -53,7 +53,7 @@ def get_data_info(flags):
         
 def load_data_and_model(flags):
     if flags.dataset == 'pipi':
-        test = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), norm_dict, batch_size = flags.batch, rank = hvd.rank(), size = hvd.size()")
+        test = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), norm_dict, batch_size = flags.batch, rank = hvd.rank(), size = hvd.size())
     model = PET_jetnet(num_feat=test.num_feat,
                        num_jet=test.num_jet,
                        num_classes=test.num_classes,

@@ -17,6 +17,18 @@ import glob
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+norm_dict = {
+    "particle": {
+      # pt, eta, phi, energy, charge, is_el, is_mu, is_charged_pion, is_neutral_particle
+      "mean": [ 2.59163526e+01, 0.0, 0.0, 7.05392784e+01, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ],
+      "std": [ 17.0718089, 1.0, 1.0, 115.65273143, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 ]
+    },
+    "nu": {
+      # (nu1) px, py, pz, (nu2) px, py, pz
+      "mean": [ 0.01682312963810866, 0.016733380409220386, 0.08293679661612122, 0.021420429070607164,-0.0006042911085853564, -0.013209993791164207 ],
+      "std": [ 13.975173949266443, 13.981232817525068, 38.85618917630569, 14.059869543855184, 14.097959985975313, 40.51226330089419 ]
+    }
+}
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Process jet data.")
     parser.add_argument("--dataset", default="pipi", help="Folder containing input files")
@@ -36,12 +48,12 @@ def parse_arguments():
 
 def get_data_info(flags):
     if flags.dataset == 'pipi':
-        val = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), flags.batch, hvd.rank(), hvd.size(), samples_name="pipi")
+        val = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), norm_dict, batch_size = flags.batch, rank = hvd.rank(), size = hvd.size())
     return val
         
 def load_data_and_model(flags):
     if flags.dataset == 'pipi':
-        test = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), flags.batch, hvd.rank(), hvd.size(), samples_name="pipi")
+        test = utils.TauReconDataLoader(os.path.join(flags.folder, 'NumpyData/', 'baseline_050210/pi_pi_recon_total_test.hdf5'), norm_dict, batch_size = flags.batch, rank = hvd.rank(), size = hvd.size()")
     model = PET_jetnet(num_feat=test.num_feat,
                        num_jet=test.num_jet,
                        num_classes=test.num_classes,

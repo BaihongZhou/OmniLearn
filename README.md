@@ -57,6 +57,6 @@ python train.py --dataset "pipi" --layer_scale --local
 The evaluation of the trained $pp \rightarrow \tau^+ \tau^- \rightarrow \pi^+ \bar{\nu_{\tau}} \pi \nu_{\tau}$ samples:
 
 ```bash
-python evaluate_recon.py --layer_scale --local --sample
+python evaluate.py --layer_scale --local --sample
 ```
 For people who want to do a systematic study, you can use the *.sh scripts, only valid in **NERSC**;

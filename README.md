@@ -26,10 +26,8 @@ Our **recommendation** is to use the docker container.
 
 ## $pp \rightarrow \tau^+ \tau^- \rightarrow \pi^+ \bar{\nu_{\tau}} \pi^- \nu_{\tau}$ 
 
-You can copy the file in Cluster@INPAC:
-```bash
-cp /lustre/collider/zhoubaihong/QE_study/pptautau/pi_pi_recon_total* <your-file-path>
-```
+All the datasets after preprocess are valid in Hugging face:
+https://huggingface.co/datasets/Quarks/Ztautau_QE/tree/main
 ### Data Preprocess
 > The codes are stored in 'preprocessing/preprocess_pipi.py';
 
